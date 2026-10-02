@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Herdr Pet</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="bubble" role="region" aria-label="Herdr agent 状态与消息">
+      <div id="bubble-content"></div>
+    </div>
+    <canvas id="pet" width="50" height="45" aria-label="Herdr pet"></canvas>
+    <span id="attention-count" class="hidden" aria-label="需要处理的 agent 数量"></span>
+    <span id="offline">offline</span>
+    <script src="i18n.js"></script>
+    <script src="theme.js"></script>
+    <script src="prompt-state.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>

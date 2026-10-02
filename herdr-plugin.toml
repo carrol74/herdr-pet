@@ -1,0 +1,27 @@
+id = "herdr.pet"
+name = "Herdr Pet"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Desktop pet for Herdr agent status and prompts"
+platforms = ["macos"]
+
+[[build]]
+command = ["npm", "ci"]
+
+[[build]]
+command = ["npm", "run", "build"]
+
+[[actions]]
+id = "start"
+title = "Start Herdr Pet"
+command = ["node", "plugin-control.cjs", "start"]
+
+[[actions]]
+id = "show"
+title = "Show Herdr Pet"
+command = ["node", "plugin-control.cjs", "show"]
+
+[[actions]]
+id = "stop"
+title = "Stop Herdr Pet"
+command = ["node", "plugin-control.cjs", "stop"]

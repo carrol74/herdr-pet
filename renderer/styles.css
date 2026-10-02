@@ -1,0 +1,406 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+#pet {
+  position: absolute;
+  cursor: grab;
+  image-rendering: pixelated;
+}
+
+#pet.dragging {
+  cursor: grabbing;
+}
+
+#offline {
+  position: absolute;
+  color: var(--pet-muted, rgb(150 150 160));
+  font-size: 10px;
+  line-height: 12px;
+}
+
+#offline.hidden {
+  display: none;
+}
+
+#attention-count {
+  position: absolute;
+  z-index: 3;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 9px;
+  color: var(--pet-on-blocked, white);
+  background: var(--pet-blocked, rgb(210 55 65));
+  box-shadow: 0 2px 5px rgb(0 0 0 / 35%);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+}
+
+#attention-count.hidden {
+  display: none;
+}
+
+#bubble {
+  --tail-x: 25px;
+  position: absolute;
+  z-index: 2;
+  display: none;
+  min-width: 120px;
+  width: min(320px, calc(100vw - 12px));
+  max-width: calc(100vw - 12px);
+  pointer-events: auto;
+  filter: drop-shadow(3px 4px 0 rgb(0 0 0 / 35%));
+}
+
+#bubble.visible {
+  display: block;
+}
+
+#bubble::before,
+#bubble::after {
+  position: absolute;
+  left: var(--tail-x);
+  width: 16px;
+  height: 10px;
+  content: "";
+  transform: translateX(-50%);
+  clip-path: polygon(0 0, 100% 0, 100% 40%, 75% 40%, 75% 70%, 50% 70%, 50% 100%, 25% 100%, 25% 70%, 0 70%);
+  background: var(--pet-border, #72788a);
+}
+
+#bubble-content {
+  max-height: calc(100vh - 12px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border: 2px solid var(--pet-border, #72788a);
+  border-radius: 0;
+  clip-path: polygon(0 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 3px), 3px calc(100% - 3px), 3px calc(100% - 6px), 0 calc(100% - 6px));
+  color: var(--pet-text, rgb(215 215 224));
+  background: var(--pet-background, rgb(20 20 30 / 95%));
+  box-shadow: 0 4px 12px rgb(0 0 0 / 32%);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+#bubble[data-side="above"]::before {
+  bottom: -9px;
+}
+
+#bubble[data-side="above"]::after {
+  bottom: -6px;
+  width: 10px;
+  height: 7px;
+  background: var(--pet-background, #14141e);
+}
+
+#bubble[data-side="below"]::before {
+  top: -9px;
+  transform: translateX(-50%) rotate(180deg);
+}
+
+#bubble[data-side="below"]::after {
+  top: -6px;
+  width: 10px;
+  height: 7px;
+  background: var(--pet-background, #14141e);
+  transform: translateX(-50%) rotate(180deg);
+}
+
+.bubble-title {
+  margin-bottom: 3px;
+  color: var(--pet-text, white);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.bubble-line + .bubble-line {
+  margin-top: 3px;
+}
+
+.action-error {
+  margin: 4px 0;
+  padding: 4px 6px;
+  border-radius: 0;
+  color: var(--pet-blocked, rgb(255 205 205));
+  background: var(--pet-surface, rgb(150 45 55 / 35%));
+}
+
+.agent-row {
+  display: flex;
+  width: 100%;
+  gap: 7px;
+  align-items: center;
+  padding: 5px 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.agent-row + .agent-row {
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.agent-row.selected {
+  background: var(--pet-selection, rgb(255 255 255 / 7%));
+}
+
+.agent-focus:hover {
+  outline: none;
+  background: var(--pet-surface, rgb(255 255 255 / 12%));
+}
+
+.status-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin-top: 4px;
+  border-radius: 0;
+  background: var(--pet-unknown, rgb(120 140 160));
+}
+
+.status-working {
+  background: var(--pet-working, rgb(235 205 110));
+}
+
+.status-blocked {
+  background: var(--pet-blocked, rgb(220 90 90));
+}
+
+.status-done {
+  background: var(--pet-done, rgb(90 190 170));
+}
+
+.status-idle {
+  border: 1px solid var(--pet-text, rgb(40 40 46));
+  background: transparent;
+}
+
+.agent-details {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.agent-message {
+  position: relative;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--pet-muted, rgb(190 195 208));
+  background: transparent;
+  cursor: pointer;
+}
+
+.agent-message::before {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 13px;
+  height: 9px;
+  border: 2px solid currentcolor;
+  border-radius: 0;
+  content: "";
+}
+
+.agent-message::after {
+  position: absolute;
+  top: 17px;
+  left: 12px;
+  width: 4px;
+  height: 4px;
+  border-bottom: 2px solid currentcolor;
+  border-left: 2px solid currentcolor;
+  content: "";
+}
+
+.agent-message:hover,
+.agent-message:focus-visible {
+  color: var(--pet-text, white);
+  background: var(--pet-surface, rgb(90 190 170 / 22%));
+}
+
+.agent-message:focus-visible {
+  outline: 2px solid var(--pet-accent, #5abeaa);
+  outline-offset: -2px;
+}
+
+.agent-heading {
+  color: var(--pet-text, white);
+  font-weight: 600;
+}
+
+.agent-subtitle {
+  max-width: 235px;
+  margin-top: 1px;
+  overflow: hidden;
+  color: var(--pet-muted, rgb(155 158 170));
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#prompt-form {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow-y: auto;
+}
+
+.prompt-editor {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+#prompt-input {
+  display: block;
+  width: 100%;
+  min-height: 112px;
+  margin: 0;
+  padding: 9px 9px 43px;
+  resize: none;
+  border: 1px solid var(--pet-border, rgb(255 255 255 / 18%));
+  border-radius: 0;
+  outline: none;
+  color: var(--pet-text, white);
+  background: var(--pet-surface, rgb(8 8 14 / 80%));
+  font: inherit;
+  user-select: text;
+}
+
+#prompt-input:focus {
+  border-color: var(--pet-accent, rgb(90 190 170 / 75%));
+}
+
+.prompt-send {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  min-width: 54px;
+  min-height: 29px;
+  padding: 4px 10px;
+  border: 1px solid var(--pet-border, rgb(255 255 255 / 16%));
+  border-radius: 0;
+  color: var(--pet-on-accent, white);
+  background: var(--pet-accent, rgb(55 135 120));
+  font: inherit;
+  cursor: pointer;
+}
+
+.agent-list {
+  min-height: 58px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.agent-focus {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 5px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--pet-accent, #5abeaa);
+  outline-offset: -2px;
+}
+
+button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.prompt-destination, .prompt-hint, .prompt-count {
+  color: var(--pet-muted, #a9adbf);
+  font-size: 12px;
+}
+
+.prompt-destination {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-count { text-align: right; }
+.prompt-feedback { color: var(--pet-done, #8cdbc9); }
+.prompt-feedback:empty { display: none; }
+.prompt-feedback.action-error { color: var(--pet-blocked, #ffcdcd); }
+.bubble-title { flex-shrink: 0; }
+
+.bubble-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  min-height: 32px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+
+.bubble-header .bubble-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.bubble-back,
+.bubble-menu {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--pet-text, #d7d7e0);
+  background: transparent;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bubble-back:hover,
+.bubble-menu:hover {
+  background: var(--pet-selection, rgb(255 255 255 / 9%));
+}
