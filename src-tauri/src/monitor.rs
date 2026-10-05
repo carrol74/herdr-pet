@@ -16,6 +16,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(200);
 pub enum Control {
     SelectAgent(String),
     SelectSession(String),
+    SetThemeFollow(bool),
 }
 
 pub fn start(app: AppHandle, state: Arc<Mutex<SharedState>>) -> Sender<Control> {
@@ -105,6 +106,7 @@ fn publish(app: &AppHandle, state: &Arc<Mutex<SharedState>>) {
 }
 
 fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<Control>) {
+    let mut theme_follow = false;
     let mut session = api::active_session();
     let mut path = api::socket_path();
     let mut selected_pane: Option<String> = None;
@@ -115,6 +117,10 @@ fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<C
     loop {
         while let Ok(control) = controls.try_recv() {
             match control {
+                Control::SetThemeFollow(follow) => {
+                    theme_follow = follow;
+                    reconcile_at = Instant::now();
+                }
                 Control::SelectAgent(pane_id) => {
                     selected_pane = Some(pane_id);
                     update_subject(&state, selected_pane.as_deref());
@@ -135,14 +141,15 @@ fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<C
 
         if Instant::now() >= reconcile_at {
             reconcile(
-                &app,
                 &state,
                 &path,
                 &session,
                 &mut selected_pane,
                 &mut status_clock,
                 &mut subscription,
+                theme_follow,
             );
+            publish(&app, &state);
             reconcile_at = Instant::now() + RECONCILE_INTERVAL;
         }
 
@@ -161,13 +168,13 @@ fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<C
 }
 
 fn reconcile(
-    app: &AppHandle,
     state: &Arc<Mutex<SharedState>>,
     path: &std::path::Path,
     session: &str,
     selected_pane: &mut Option<String>,
     status_clock: &mut HashMap<String, (AgentStatus, u64)>,
     subscription: &mut Option<Subscription>,
+    theme_follow: bool,
 ) {
     let sessions = api::available_sessions(session)
         .into_iter()
@@ -179,7 +186,11 @@ fn reconcile(
 
     match api::agent_list(path) {
         Ok(agent_data) => {
-            let theme = api::client_theme(path).ok().flatten();
+            let theme = if theme_follow {
+                api::client_theme(path).ok().flatten()
+            } else {
+                None
+            };
             let now = now_ms();
             status_clock
                 .retain(|pane_id, _| agent_data.iter().any(|agent| agent.pane_id == *pane_id));
@@ -240,8 +251,6 @@ fn reconcile(
                     theme,
                 };
             }
-            publish(app, state);
-
             if pane_ids.is_empty() {
                 *subscription = None;
             } else if !subscription
@@ -268,8 +277,6 @@ fn reconcile(
             shared.snapshot.session = session.to_string();
             shared.snapshot.sessions = sessions;
             shared.snapshot.offline_reason = Some(error.to_string());
-            drop(shared);
-            publish(app, state);
         }
     }
 }

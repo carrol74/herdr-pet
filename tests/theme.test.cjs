@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { themeVariables, themedSpriteColors } = require("../renderer/theme.js");
+const { themeVariables, resolveTheme, selectedTheme } = require("../renderer/theme.js");
 
 test("theme variables preserve light colors and readable accent labels", () => {
   const variables = themeVariables({ colors: { background: "#eff1f5", text: "#4c4f69", accent: "#f5c2e7", blocked: "#111111" } });
@@ -10,18 +10,24 @@ test("theme variables preserve light colors and readable accent labels", () => {
   assert.equal(variables["--pet-on-blocked"], "#ffffff");
 });
 
+test("manual selection survives changing observed themes", () => {
+  const chosen = resolveTheme("gruvbox-light", { name: "other", colors: { background: "#000000" } });
+  assert.equal(chosen.name, "gruvbox-light");
+  assert.deepEqual(resolveTheme("gruvbox-light", null), chosen);
+  assert.deepEqual(resolveTheme("gruvbox-light", { name: "changed" }), chosen);
+});
+
+test("automatic themes fill unavailable colors without overwriting observed colors", () => {
+  const fallback = resolveTheme("auto", null);
+  const observed = resolveTheme("auto", { name: "custom", colors: { accent: "#123456", background: null } });
+  assert.equal(observed.colors.accent, "#123456");
+  assert.equal(observed.colors.background, fallback.colors.background);
+  assert.equal(observed.name, "custom");
+  assert.equal(selectedTheme("removed-theme"), "auto");
+});
+
 test("unavailable or invalid colors do not introduce stale theme variables", () => {
   assert.deepEqual(themeVariables(null), {});
   assert.deepEqual(themeVariables({ colors: { accent: "url(example)", text: null, background: "#xyzxyz", unexpected: "#ffffff" } }), {});
 });
 
-test("sprite state colors follow semantic roles and retain unavailable defaults", () => {
-  const base = { k: "#111111", w: "#eeeeee", b: "#222222", r: "#ff0000", y: "#ffff00", t: "#00ffff" };
-  const themed = themedSpriteColors(base, { colors: { text: "#eeeeee", background: "#111111", working: "#ddccbb", blocked: "#cc1122", done: "#aabbcc" } });
-  assert.equal(themed.k, "#eeeeee");
-  assert.equal(themed.y, "#ddccbb");
-  assert.equal(themed.r, "#cc1122");
-  assert.equal(themed.t, "#aabbcc");
-  assert.equal(themed.b, base.b);
-  assert.deepEqual(themedSpriteColors(base, null), base);
-});

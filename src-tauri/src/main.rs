@@ -6,13 +6,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::menu::{CheckMenuItemBuilder, ContextMenu, MenuBuilder, SubmenuBuilder};
 use tauri::{
-    Emitter, LogicalPosition, Manager, PhysicalPosition, Position, State, WebviewUrl,
-    WebviewWindow, WebviewWindowBuilder, WindowEvent,
+    Emitter, Manager, PhysicalPosition, Position, State, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder, WindowEvent,
 };
 
 mod api;
+mod menu;
 mod monitor;
 mod platform;
 mod plugin_control;
@@ -23,12 +23,11 @@ mod voice;
 
 use state::PetState;
 
-const WINDOW_WIDTH: f64 = 320.0;
+const WINDOW_WIDTH: f64 = 380.0;
 const WINDOW_HEIGHT: f64 = 620.0;
 const DEFAULT_PET_LEFT: f64 = 12.0;
-// 宠物停靠窗口底部,预留 12px 边距。数值必须和 renderer/index.html 里
-// canvas 的 height 属性一致,JS 启动时会以 canvas 属性为准上报。
-const DEFAULT_PET_TOP: f64 = WINDOW_HEIGHT - 45.0 - 12.0;
+// 初始高度与 renderer/styles.css 保持一致，启动后使用 renderer 上报的尺寸。
+const DEFAULT_PET_TOP: f64 = WINDOW_HEIGHT - 110.0 - 12.0;
 const MOVE_SETTLE_DELAY: Duration = Duration::from_millis(140);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -230,78 +229,11 @@ async fn send_prompt(
 }
 
 #[tauri::command]
-fn show_settings_menu(
-    window: tauri::Window,
-    state: State<'_, ManagedState>,
-    english: bool,
-    menu_x: f64,
-    menu_y: f64,
-) -> Result<(), String> {
-    let snapshot = state
-        .shared
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .snapshot
-        .clone();
-    let app = window.app_handle();
-    let classic = CheckMenuItemBuilder::with_id(
-        "skin-classic",
-        if english {
-            "Classic pixel"
-        } else {
-            "经典像素"
-        },
-    )
-    .checked(true)
-    .build(app)
-    .map_err(|error| error.to_string())?;
-    let skin = SubmenuBuilder::new(app, if english { "Skin" } else { "皮肤" })
-        .item(&classic)
-        .build()
-        .map_err(|error| error.to_string())?;
-
-    let mut sessions = SubmenuBuilder::new(app, if english { "Session" } else { "会话" });
-    for session in &snapshot.sessions {
-        let item = CheckMenuItemBuilder::with_id(
-            format!("select-session:{}", session.name),
-            &session.name,
-        )
-        .checked(session.active)
-        .build(app)
-        .map_err(|error| error.to_string())?;
-        sessions = sessions.item(&item);
-    }
-    let sessions = sessions.build().map_err(|error| error.to_string())?;
-    let chinese = CheckMenuItemBuilder::with_id("language-zh", "中文")
-        .checked(!english)
-        .build(app)
-        .map_err(|error| error.to_string())?;
-    let english_item = CheckMenuItemBuilder::with_id("language-en", "English")
-        .checked(english)
-        .build(app)
-        .map_err(|error| error.to_string())?;
-    let language = SubmenuBuilder::new(app, if english { "Language" } else { "语言" })
-        .item(&chinese)
-        .item(&english_item)
-        .build()
-        .map_err(|error| error.to_string())?;
-
-    let mut menu = MenuBuilder::new(app);
-    if snapshot.sessions.len() > 1 {
-        menu = menu.item(&sessions).separator();
-    }
-    let menu = menu
-        .item(&language)
-        .item(&skin)
-        .separator()
-        .text("quit", if english { "Quit" } else { "退出" })
-        .build()
-        .map_err(|error| error.to_string())?;
-    menu.popup_at(
-        window,
-        Position::Logical(LogicalPosition::new(menu_x, menu_y)),
-    )
-    .map_err(|error| error.to_string())
+fn set_theme_follow(control: State<'_, MonitorControl>, follow: bool) -> Result<(), String> {
+    control
+        .0
+        .send(monitor::Control::SetThemeFollow(follow))
+        .map_err(|error| error.to_string())
 }
 
 fn run_focus_request(window: WebviewWindow, path: PathBuf, pane_id: String) {
@@ -330,6 +262,14 @@ fn run_focus_request(window: WebviewWindow, path: PathBuf, pane_id: String) {
 
 fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
     let id = event.id().as_ref();
+    if let Some(skin) = id.strip_prefix("skin:") {
+        let _ = app.emit("pet-skin", skin);
+        return;
+    }
+    if let Some(theme) = id.strip_prefix("theme:") {
+        let _ = app.emit("pet-theme", theme);
+        return;
+    }
     if let Some(language) = id.strip_prefix("language-") {
         let _ = app.emit("pet-language", language);
         return;
@@ -381,7 +321,7 @@ fn start_position_worker(
 
 fn normalize_window(window: &WebviewWindow, settings: &SettingsStore, pet_size: Option<PetSize>) {
     let Some(pet_size) = pet_size else {
-        // The renderer has not reported the canvas size yet; keep the current
+        // The renderer has not reported the pet size yet; keep the current
         // window position until it does so the pet is never clamped against
         // dimensions that do not match the actual sprite.
         return;
@@ -476,7 +416,8 @@ fn main() {
             set_prompt_active,
             focus_agent,
             send_prompt,
-            show_settings_menu,
+            menu::show_settings_menu,
+            set_theme_follow,
             preview::agent_preview,
             voice::voice_start,
             voice::voice_stop,
