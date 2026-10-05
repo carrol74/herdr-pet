@@ -3,7 +3,7 @@ name = "Herdr Pet"
 version = "0.1.0"
 min_herdr_version = "0.9.0"
 description = "Desktop pet for Herdr agent status and prompts"
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 
 [[build]]
 command = ["npm", "ci"]

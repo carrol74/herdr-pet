@@ -15,9 +15,11 @@ use tauri::{
 mod api;
 mod monitor;
 mod platform;
-#[cfg(target_os = "macos")]
 mod plugin_control;
+mod preview;
 mod state;
+mod transport;
+mod voice;
 
 use state::PetState;
 
@@ -40,7 +42,7 @@ pub(crate) struct SharedState {
     pub(crate) socket_path: PathBuf,
 }
 
-struct ManagedState {
+pub(crate) struct ManagedState {
     shared: Arc<Mutex<SharedState>>,
     pet_size: Arc<Mutex<Option<PetSize>>>,
 }
@@ -156,10 +158,9 @@ fn set_pet_size(state: State<'_, ManagedState>, width: f64, height: f64) {
 #[tauri::command]
 fn start_drag(window: WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|error| error.to_string())?;
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     std::thread::spawn(move || {
-        // macOS start_dragging returns once the native drag begins, so a
-        // detached watcher reports the actual button release to the renderer.
+        // Native dragging can swallow WebView pointer-up events.
         while platform::primary_mouse_button_down() {
             std::thread::sleep(Duration::from_millis(30));
         }
@@ -312,6 +313,13 @@ fn run_focus_request(window: WebviewWindow, path: PathBuf, pane_id: String) {
             return;
         }
         if let Err(error) = api::activate_client(&path) {
+            if matches!(
+                error,
+                api::ApiError::UnsupportedMethod(_) | api::ApiError::ActivationUnavailable
+            ) {
+                let _ = window.emit("pet-notice", "activationUnavailable");
+                return;
+            }
             let _ = window.emit(
                 "pet-error",
                 format!("已切换 agent，但无法显示 Herdr 窗口：{error}"),
@@ -438,7 +446,6 @@ fn normalize_window(window: &WebviewWindow, settings: &SettingsStore, pet_size: 
 }
 
 fn main() {
-    #[cfg(target_os = "macos")]
     let plugin_server = match plugin_control::prepare() {
         Ok(plugin_control::PreparedControl::Standalone) => None,
         Ok(plugin_control::PreparedControl::Existing) => return,
@@ -448,7 +455,6 @@ fn main() {
             return;
         }
     };
-    #[cfg(target_os = "macos")]
     let setup_plugin_server = plugin_server.clone();
     let shared = Arc::new(Mutex::new(SharedState {
         snapshot: PetState::default(),
@@ -470,7 +476,11 @@ fn main() {
             set_prompt_active,
             focus_agent,
             send_prompt,
-            show_settings_menu
+            show_settings_menu,
+            preview::agent_preview,
+            voice::voice_start,
+            voice::voice_stop,
+            voice::voice_cancel
         ])
         .on_menu_event(handle_menu_event)
         .setup(move |app| {
@@ -488,6 +498,8 @@ fn main() {
             let settings = Arc::new(SettingsStore::load(settings_path));
             let saved = settings.snapshot();
             app.manage(Arc::clone(&settings));
+            let model_dir = app.path().app_local_data_dir()?.join("models");
+            app.manage(voice::VoiceService::new(app.handle().clone(), model_dir));
 
             let window =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
@@ -514,16 +526,19 @@ fn main() {
             platform::configure_window(&window)?;
             start_position_worker(window.clone(), settings, Arc::clone(&pet_size));
             window.show()?;
-            #[cfg(target_os = "macos")]
             if let Some(server) = &setup_plugin_server {
-                server.start(app.handle().clone())?;
+                server.start(app.handle().clone());
             }
             let control = monitor::start(app.handle().clone(), Arc::clone(&monitor_state));
             app.manage(MonitorControl(control));
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("failed to run herdr-pet");
-    #[cfg(target_os = "macos")]
+        .build(tauri::generate_context!())
+        .expect("failed to build herdr-pet")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                app.state::<voice::VoiceService>().cancel_current();
+            }
+        });
     drop(plugin_server);
 }

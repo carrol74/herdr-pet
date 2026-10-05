@@ -11,3 +11,7 @@ pub fn primary_mouse_button_down() -> bool {
 pub fn set_prompt_active(_window: &WebviewWindow, _active: bool) -> tauri::Result<()> {
     Ok(())
 }
+
+pub fn request_microphone() -> Result<(), String> {
+    Ok(())
+}

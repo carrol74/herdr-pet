@@ -1,10 +1,10 @@
-use std::fs;
-use std::io::{self, Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::io::{self, Write};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use interprocess::local_socket::{prelude::*, GenericFilePath, ListenerOptions};
 use tauri::Manager;
 
 pub enum PreparedControl {
@@ -12,16 +12,8 @@ pub enum PreparedControl {
     Existing,
     Server(ControlServer),
 }
-
 pub struct ControlServer {
-    listener: UnixListener,
-    path: PathBuf,
-}
-
-impl Drop for ControlServer {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
+    listener: Arc<interprocess::local_socket::Listener>,
 }
 
 pub fn prepare() -> io::Result<PreparedControl> {
@@ -29,32 +21,39 @@ pub fn prepare() -> io::Result<PreparedControl> {
         return Ok(PreparedControl::Standalone);
     };
     let directory = PathBuf::from(directory);
-    fs::create_dir_all(&directory)?;
-    let path = directory.join("pet-control.sock");
-    match UnixListener::bind(&path) {
-        Ok(listener) => Ok(PreparedControl::Server(ControlServer { listener, path })),
-        Err(error) if error.kind() == io::ErrorKind::AddrInUse => {
-            match send_show(&path) {
-                Ok(()) => Ok(PreparedControl::Existing),
-                Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => {
-                    fs::remove_file(&path)?;
-                    let listener = UnixListener::bind(&path)?;
-                    Ok(PreparedControl::Server(ControlServer { listener, path }))
-                }
-                Err(error) => Err(error),
-            }
-        }
-        Err(error) => Err(error),
+    std::fs::create_dir_all(&directory)?;
+    let endpoint = match std::env::var_os("HERDR_PET_CONTROL_ENDPOINT") {
+        Some(value) => PathBuf::from(value),
+        None => directory.join("pet-control.sock"),
+    };
+    match send_show(&endpoint) {
+        Ok(()) => return Ok(PreparedControl::Existing),
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused
+            ) => {}
+        Err(error) => return Err(error),
     }
+    let name = endpoint.to_fs_name::<GenericFilePath>()?;
+    let listener = ListenerOptions::new()
+        .name(name)
+        .try_overwrite(true)
+        .create_sync()?;
+    Ok(PreparedControl::Server(ControlServer {
+        listener: Arc::new(listener),
+    }))
 }
 
-fn send_show(path: &PathBuf) -> io::Result<()> {
-    let mut stream = UnixStream::connect(path)?;
-    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+fn read_line(stream: &mut interprocess::local_socket::Stream) -> io::Result<Vec<u8>> {
+    crate::transport::read_line(stream, Duration::from_secs(2), 16)
+}
+
+fn send_show(endpoint: &PathBuf) -> io::Result<()> {
+    let mut stream =
+        interprocess::local_socket::Stream::connect(endpoint.to_fs_name::<GenericFilePath>()?)?;
     stream.write_all(b"show\n")?;
-    let mut response = [0; 3];
-    stream.read_exact(&mut response)?;
-    if response == *b"ok\n" {
+    if read_line(&mut stream)? == b"ok\n" {
         Ok(())
     } else {
         Err(io::Error::other("Herdr Pet rejected the show request"))
@@ -62,29 +61,29 @@ fn send_show(path: &PathBuf) -> io::Result<()> {
 }
 
 impl ControlServer {
-    pub fn start(&self, app: tauri::AppHandle) -> io::Result<()> {
-        let listener = self.listener.try_clone()?;
+    pub fn start(&self, app: tauri::AppHandle) {
+        let listener = Arc::clone(&self.listener);
         thread::spawn(move || {
             for connection in listener.incoming() {
                 let Ok(mut stream) = connection else {
                     continue;
                 };
-                let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
-                let mut request = [0; 16];
-                let Ok(length) = stream.read(&mut request) else {
+                let Ok(command) = read_line(&mut stream) else {
                     continue;
                 };
-                match &request[..length] {
+                let _ = crate::platform::set_stream_polling(&mut stream, false);
+                match command.as_slice() {
                     b"show\n" | b"start\n" => {
                         let Some(window) = app.get_webview_window("main") else {
                             let _ = stream.write_all(b"no\n");
                             continue;
                         };
-                        if window.show().and_then(|()| window.set_focus()).is_ok() {
-                            let _ = stream.write_all(b"ok\n");
+                        let response = if window.show().and_then(|()| window.set_focus()).is_ok() {
+                            b"ok\n"
                         } else {
-                            let _ = stream.write_all(b"no\n");
-                        }
+                            b"no\n"
+                        };
+                        let _ = stream.write_all(response);
                     }
                     b"stop\n" => {
                         let _ = stream.write_all(b"ok\n");
@@ -97,6 +96,5 @@ impl ControlServer {
                 }
             }
         });
-        Ok(())
     }
 }

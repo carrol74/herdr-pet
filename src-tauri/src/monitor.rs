@@ -1,10 +1,9 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use interprocess::local_socket::traits::Stream as _;
 use tauri::{AppHandle, Emitter};
 
 use crate::api::{self, AgentInfo, AgentStatus};
@@ -45,10 +44,10 @@ impl Subscription {
             "params": {"subscriptions": subscriptions},
         });
         let mut stream = api::connect(path)?;
-        stream.set_nonblocking(true).map_err(api::ApiError::Io)?;
         stream.write_all(serde_json::to_string(&request)?.as_bytes())?;
         stream.write_all(b"\n")?;
         stream.flush()?;
+        crate::platform::set_stream_polling(&mut stream, true)?;
         Ok(Self {
             stream,
             pane_ids: pane_ids.iter().cloned().collect(),
@@ -66,10 +65,10 @@ impl Subscription {
     fn drain(&mut self) -> Result<Vec<api::StatusEvent>, api::ApiError> {
         let mut chunk = [0_u8; 4096];
         loop {
-            match self.stream.read(&mut chunk) {
-                Ok(0) => return Err(api::ApiError::Closed),
-                Ok(length) => self.buffer.extend_from_slice(&chunk[..length]),
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+            match crate::platform::read_available(&mut self.stream, &mut chunk) {
+                Ok(Some(0)) => return Err(api::ApiError::Closed),
+                Ok(Some(length)) => self.buffer.extend_from_slice(&chunk[..length]),
+                Ok(None) => break,
                 Err(error) => return Err(api::ApiError::Io(error)),
             }
         }

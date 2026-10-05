@@ -1,4 +1,4 @@
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -51,6 +51,8 @@ pub enum ApiError {
     Json(serde_json::Error),
     Closed,
     Server(String),
+    UnsupportedMethod(String),
+    ActivationUnavailable,
 }
 
 impl std::fmt::Display for ApiError {
@@ -60,6 +62,8 @@ impl std::fmt::Display for ApiError {
             Self::Json(error) => write!(formatter, "{error}"),
             Self::Closed => write!(formatter, "connection closed"),
             Self::Server(error) => write!(formatter, "{error}"),
+            Self::UnsupportedMethod(method) => write!(formatter, "Herdr does not support {method}"),
+            Self::ActivationUnavailable => write!(formatter, "Terminal activation is unavailable"),
         }
     }
 }
@@ -225,10 +229,12 @@ fn activation_result(result: &serde_json::Value) -> Result<(), ApiError> {
         .get("reason")
         .and_then(serde_json::Value::as_str)
         .unwrap_or("failed");
+    if reason == "unsupported_terminal" {
+        return Err(ApiError::ActivationUnavailable);
+    }
     let message = match reason {
         "no_foreground_client" => "没有可激活的 Herdr 客户端",
         "client_unavailable" => "Herdr 客户端当前不可用",
-        "unsupported_terminal" => "当前终端暂不支持自动显示 Herdr 窗口",
         "permission_denied" => "macOS 未允许 Herdr 控制 Ghostty",
         "terminal_not_found" => "找不到承载 Herdr 的 Ghostty 窗口",
         "busy" => "Herdr 正在处理另一次窗口切换",
@@ -248,17 +254,22 @@ pub fn request(
     stream.write_all(serde_json::to_string(&request)?.as_bytes())?;
     stream.write_all(b"\n")?;
     stream.flush()?;
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    if reader.read_line(&mut line)? == 0 || line.trim().is_empty() {
-        return Err(ApiError::Closed);
-    }
-    let response = serde_json::from_str::<serde_json::Value>(&line)?;
+    let line =
+        crate::transport::read_line(&mut stream, std::time::Duration::from_secs(40), 1024 * 1024)?;
+    let response = serde_json::from_slice::<serde_json::Value>(&line)?;
     if let Some(error) = response.get("error") {
         let message = error
             .get("message")
             .and_then(serde_json::Value::as_str)
             .unwrap_or("Herdr request failed");
+        let code = error.get("code").and_then(serde_json::Value::as_str);
+        if matches!(code, Some("unknown_method" | "method_not_found"))
+            || (code == Some("invalid_request")
+                && message.contains("unknown variant")
+                && message.contains(method))
+        {
+            return Err(ApiError::UnsupportedMethod(method.to_string()));
+        }
         return Err(ApiError::Server(message.to_string()));
     }
     response

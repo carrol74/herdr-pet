@@ -5,13 +5,19 @@ const { spawn } = require("node:child_process");
 
 const action = process.argv[2];
 const stateDir = process.env.HERDR_PLUGIN_STATE_DIR;
-const socketPath = stateDir ? path.join(stateDir, "pet-control.sock") : null;
-const executable = path.join(__dirname, "src-tauri", "target", "release", "herdr-pet");
+const socketPath = stateDir ? (process.platform === "win32"
+  ? `\\\\.\\pipe\\herdr-pet-${Buffer.from(path.resolve(stateDir).toLowerCase()).toString("base64url")}`
+  : path.join(stateDir, "pet-control.sock")) : null;
+const release = path.join(__dirname, "src-tauri", "target", "release");
+const executable = process.platform === "darwin"
+  ? path.join(release, "bundle", "macos", "Herdr Pet.app", "Contents", "MacOS", "herdr-pet")
+  : path.join(release, process.platform === "win32" ? "herdr-pet.exe" : "herdr-pet");
 
 function send(command) {
   return new Promise((resolve, reject) => {
     const client = net.createConnection(socketPath);
     let settled = false;
+    let response = "";
     const finish = (error) => {
       if (settled) return;
       settled = true;
@@ -27,7 +33,9 @@ function send(command) {
     client.once("connect", () => client.write(`${command}\n`));
     client.once("error", finish);
     client.on("data", (data) => {
-      if (data.toString().includes("ok\n")) finish();
+      response += data.toString();
+      if (!response.includes("\n") && response.length < 16) return;
+      if (response === "ok\n") finish();
       else finish(new Error("Herdr Pet rejected the action"));
     });
     client.once("end", () => finish(new Error("Herdr Pet closed the control connection")));
@@ -59,7 +67,7 @@ async function main() {
   const child = spawn(executable, [], {
     detached: true,
     stdio: ["ignore", "ignore", log],
-    env: process.env,
+    env: { ...process.env, HERDR_PET_CONTROL_ENDPOINT: socketPath },
   });
   fs.closeSync(log);
   await new Promise((resolve, reject) => {
