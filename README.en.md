@@ -82,11 +82,3 @@ Manage macOS permission in System Settings → Privacy & Security → Microphone
 Optional endpoints are not guaranteed by the version number. Their absence does not turn successful focus or submission into a failure. If an existing activation endpoint fails, the pet reports successful focus and the activation failure separately. The companion fork currently implements activation for Herdr running directly in Ghostty on macOS; other terminals, tmux, GNU Screen, and Windows activation depend on Herdr-side support.
 
 The transparent frameless window stays on top. Dragging and display changes keep the pet visible. macOS supports Spaces and ordinary fullscreen windows; the composer lowers the window level for native IME candidates. Windows uses native topmost behavior and window dragging. Lock screens and secure desktops are outside the overlay's scope.
-
-## Skins and animation
-
-Sprite is the default. Choose Cloud or Mecha Cat from the upper-right Skin menu. The selection persists independently across restarts and sessions. All three share rounded bubbles and the composer.
-
-Body colors remain fixed. Themes color the Sprite's tip and arms, Cat's ear/chest lights, and Cloud's weather accessories. Each state selects the current palette's accent, working, blocked, done, unknown, or muted role. Cloud uses a sun, falling rain, a small storm cloud with lightning, and fog.
-
-Idle breathes and blinks; working loops gently; attention hops once on entry; done celebrates once; unknown tilts slowly; offline closes its eyes and rests. Repeated status updates do not replay entry animations. Eyes follow hover, dragging pauses motion, and release settles gently. System reduced-motion preferences keep static state cues and disable animation. Hidden windows pause animation.
