@@ -2,29 +2,13 @@
 
 English · [简体中文](README.md)
 
-A lightweight desktop companion that animates the current state of local Herdr agents.
+A standalone desktop pet plugin for Herdr on macOS and Windows. Shows agent status and recent terminal output, and sends typed prompts or drafts produced by local voice input. Installation does not modify Herdr source.
 
-## Run
+## Install and start
 
-From this directory:
+Requirements: Herdr 0.9.0+, Node.js 20+, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/). Voice builds also need CMake, a C++ compiler, and libclang: Xcode Command Line Tools on macOS; Visual Studio Desktop development with C++, Windows SDK, and LLVM on Windows. Use native PowerShell and the MSVC Rust toolchain on Windows.
 
-```bash
-npm install
-npm start
-```
-
-Requires Node.js, Rust, and the Tauri 2 system dependencies for your platform. Start a Herdr session first. Select a specific connection using Herdr's existing environment variables:
-
-```bash
-HERDR_SESSION=work npm start
-HERDR_SOCKET_PATH=/path/to/herdr.sock npm start
-```
-
-## Install as a Herdr plugin (macOS)
-
-The plugin requires Herdr 0.9.0 or newer. Installation builds the pet locally with Node.js, Rust, and Tauri. The manifest currently declares macOS support. The direct development workflow remains available.
-
-For a local checkout, build before linking:
+Start Herdr in another terminal, then run from this repository:
 
 ```sh
 npm ci
@@ -33,7 +17,13 @@ herdr plugin link .
 herdr plugin action invoke herdr.pet.start
 ```
 
-After publishing the repository to GitHub, `herdr plugin install <owner>/<repo>` runs the manifest's build commands during installation. `plugin link` does not build. The plugin does not start automatically with Herdr; invoke `start` when needed.
+macOS builds an `.app` containing the microphone usage description; the plugin launches its executable. Windows builds `herdr-pet.exe`. Linking does not build. After updating source, stop the pet, rebuild, and start it:
+
+```sh
+herdr plugin action invoke herdr.pet.stop
+npm run build
+herdr plugin action invoke herdr.pet.start
+```
 
 ```sh
 herdr plugin action invoke herdr.pet.show
@@ -41,38 +31,62 @@ herdr plugin action invoke herdr.pet.stop
 herdr plugin unlink herdr.pet
 ```
 
-`start` and `show` use one pet process. `stop` closes only a pet launched through the plugin. Settings live in Herdr's plugin configuration directory; startup errors are written to `pet.log` in its plugin state directory. Before uninstalling a GitHub-managed copy, invoke `stop`, then run `herdr plugin uninstall herdr.pet`.
+Start/show reuse one plugin process. The pet does not start automatically with Herdr. Startup errors go to `pet.log` in Herdr's plugin state directory. After publishing a GitHub repository, `herdr plugin install <owner>/<repo>` installs it and runs the manifest's build commands. Stop before uninstalling with `herdr plugin uninstall herdr.pet`.
 
-## Controls
+`npm start` defaults to the debug `herdr-dev` socket. Specify the actual socket to connect to an official release. These examples use the default session and configuration directory; adjust for custom `XDG_CONFIG_HOME` or session paths:
 
-- Drag the pet with the left mouse button using native window dragging.
-- Double-click the pet to focus its displayed agent and request activation of the terminal hosting Herdr.
-- Hover to see all agents in the selected session, including status, title, and elapsed status time. Each row has separate buttons for focusing the agent and writing a prompt.
-- Open the bubble's settings menu to select a session, language, or skin, or to quit. The session menu appears only when multiple sessions are available. The current skin is Classic pixel.
-- The badge counts agents needing attention.
-
-The bubble has a pixel border and tail, readable text, and a scrollable agent list. The top-right settings menu offers language, skin, session, and quit actions. Your language selection is saved locally. On first launch, Chinese system locales select Chinese; other locales select English. The prompt view has a back button at the top left and a send button inside the editor. The bubble has room for a complete agent row or prompt form.
-
-The pet follows the selected session's foreground Herdr client's effective theme, including custom colors and light/dark selection. Bubble surfaces, text, controls, badges, and animation state colors refresh in the background every five seconds. This requires an updated Herdr server and client supporting `client.theme.get`. Older versions, missing compatible clients, and unobserved terminal colors use the pet's defaults. Reading colors does not change your theme.
-
-The prompt editor supports multiple lines and shows its target and character count. Enter inserts a new line; Ctrl/Cmd + Enter sends. Shortcuts do not submit while an input method is composing text. Drafts are kept separately for each session and pane while the app runs, including when you go back or hide the bubble. They are not saved after quitting.
-
-Sending waits for Herdr's API response. While pending, duplicate submission and target changes are disabled. “Submitted to Herdr” confirms submission, not completion of the agent's task. Failure keeps the draft and displays an error for manual retry. There are no automatic retries.
-
-Automatic terminal activation currently has a macOS Ghostty implementation for Herdr running directly in the terminal. macOS may ask for permission to let Herdr control Ghostty. If denied, change it in System Settings → Privacy & Security → Automation. Selecting a pane can succeed while activating its outer window fails; the pet reports the partial success. Precise tmux and GNU Screen window targeting is not supported.
-
-## Window behavior
-
-The transparent, borderless window stays above ordinary windows, remembers its position, and adjusts to display boundaries after dragging. Bubbles prefer the space above the pet and move below it when necessary. Display-layout changes move the pet back into a visible area.
-
-On macOS, the app uses the Accessory activation policy and native window settings to appear across Spaces and alongside full-screen apps. Editing a prompt temporarily lowers its window level so input-method candidate windows can appear above it. Lock screens, secure desktops, and DRM-protected content cannot be covered.
-
-## Performance and validation
-
-Socket requests and subscriptions run in Rust background work; the WebView receives data snapshots. Native dragging avoids IPC on every movement frame. Animation updates every 400 ms; input feedback is event-driven.
-
-```bash
-npm test
+```sh
+HERDR_SOCKET_PATH="$HOME/.config/herdr/herdr.sock" npm start
 ```
 
-This runs Node tests for draft state, localization, and theme mapping, then the Rust tests.
+```powershell
+$env:HERDR_SOCKET_PATH = Join-Path $env:APPDATA "herdr\herdr.sock"
+npm start
+Remove-Item Env:HERDR_SOCKET_PATH
+```
+
+`HERDR_SESSION` selects a named session; explicit `HERDR_SOCKET_PATH` takes priority. Plugin actions inherit the session path provided by Herdr.
+
+## Interaction and themes
+
+- Drag to move the pet; double-click to focus the current agent. Position is saved.
+- Hover to show cards with titles, status, and elapsed time. Click a card to focus its pane, or the message icon to open the composer.
+- Preview shows the selected agent's last two nonempty terminal lines, capped at 180 characters each. Hover or keyboard-focus a card to select its preview; the current agent is selected initially. Only one agent is read, every five seconds while the bubble is visible. Failed reads leave cards and status available.
+- The upper-right menu contains Theme, Language, Skin, Session, and Quit, without a duplicate context menu. Session appears only when multiple sessions exist.
+- Six palettes use Herdr's built-in colors: Catppuccin Mocha / Latte, Tokyo Night / Day, and Gruvbox Dark / Light. Colors apply to the bubble, text, controls, status, and pet. Manual choices persist and override automatic matching. Only automatic mode queries Herdr's theme endpoint; unavailable themes fall back to Catppuccin Mocha.
+
+The composer has a back button at the upper left and microphone/send buttons inside the input. Enter adds a line; Ctrl/Cmd + Enter sends, except during IME composition. Drafts are retained per session and agent until exit. Failed submission keeps the draft. “Submitted to Herdr” confirms submission, not task completion.
+
+## Local voice input
+
+The first microphone click requests permission, downloads multilingual Whisper Base, and loads it. The approximately 142 MiB model comes from the [whisper.cpp model repository](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md); Rust inference uses [whisper-rs](https://docs.rs/whisper-rs/0.16.0/whisper_rs/).
+
+Recording starts after preparation. Click again to stop; recording stops automatically at 60 seconds. Transcription is inserted at the original cursor or replaces selected text. Review the draft and send manually. The Chinese interface recognizes Chinese; the English interface recognizes English. Cancel is available during preparation, recording, or transcription. Cancellation and failures preserve the typed draft.
+
+Audio stays in memory: it is neither uploaded nor saved as an audio file. Only the initial model download requires a network connection; later transcription works offline. The cached model is `models/ggml-base.bin` inside the app's local data directory. Retry download errors by clicking again; remove a damaged model to download it again:
+
+- macOS: `~/Library/Application Support/dev.herdr.pet/models/ggml-base.bin`
+- Windows: `%LOCALAPPDATA%\dev.herdr.pet\models\ggml-base.bin`
+
+Manage macOS permission in System Settings → Privacy & Security → Microphone. On Windows, enable Settings → Privacy & security → Microphone → Let desktop apps access your microphone.
+
+## Herdr compatibility and windows
+
+| Feature | Official Herdr | Herdr fork with optional endpoints |
+| --- | --- | --- |
+| Status, previews, prompts, pane focus | Existing endpoints | Supported |
+| Six manual themes | Supported | Supported |
+| Match the actual Herdr theme | Catppuccin fallback | Enabled with `client.theme.get` |
+| Bring the terminal window forward | Notice confirms pane focus without activation | Enabled when `client.activate` and the terminal support it |
+
+Optional endpoints are not guaranteed by the version number. Their absence does not turn successful focus or submission into a failure. If an existing activation endpoint fails, the pet reports successful focus and the activation failure separately. The companion fork currently implements activation for Herdr running directly in Ghostty on macOS; other terminals, tmux, GNU Screen, and Windows activation depend on Herdr-side support.
+
+The transparent frameless window stays on top. Dragging and display changes keep the pet visible. macOS supports Spaces and ordinary fullscreen windows; the composer lowers the window level for native IME candidates. Windows uses native topmost behavior and window dragging. Lock screens and secure desktops are outside the overlay's scope.
+
+## Skins and animation
+
+Sprite is the default. Choose Cloud or Mecha Cat from the upper-right Skin menu. The selection persists independently across restarts and sessions. All three share rounded bubbles and the composer.
+
+Body colors remain fixed. Themes color the Sprite's tip and arms, Cat's ear/chest lights, and Cloud's weather accessories. Each state selects the current palette's accent, working, blocked, done, unknown, or muted role. Cloud uses a sun, falling rain, a small storm cloud with lightning, and fog.
+
+Idle breathes and blinks; working loops gently; attention hops once on entry; done celebrates once; unknown tilts slowly; offline closes its eyes and rests. Repeated status updates do not replay entry animations. Eyes follow hover, dragging pauses motion, and release settles gently. System reduced-motion preferences keep static state cues and disable animation. Hidden windows pause animation.

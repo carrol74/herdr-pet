@@ -6,3 +6,4 @@ tmp/
 .local/
 .DS_Store
 .zig-cache/
+/docs/
