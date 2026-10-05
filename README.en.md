@@ -51,7 +51,7 @@ Remove-Item Env:HERDR_SOCKET_PATH
 
 - Drag to move the pet; double-click to focus the current agent. Position is saved.
 - Hover to show cards with titles, status, and elapsed time. Click a card to focus its pane, or the message icon to open the composer.
-- Preview shows the selected agent's last two nonempty terminal lines, capped at 180 characters each. Hover or keyboard-focus a card to select its preview; the current agent is selected initially. Only one agent is read, every five seconds while the bubble is visible. Failed reads leave cards and status available.
+- The selected agent card shows its last two nonempty terminal lines, capped at 180 characters each. Hover or keyboard-focus a card to select its preview; the current agent is selected initially. Only one agent is read, every five seconds while the bubble is visible. Failed reads leave cards and status available.
 - The upper-right menu contains Theme, Language, Skin, Session, and Quit, without a duplicate context menu. Session appears only when multiple sessions exist.
 - Six palettes use Herdr's built-in colors: Catppuccin Mocha / Latte, Tokyo Night / Day, and Gruvbox Dark / Light. Colors apply to the bubble, text, controls, status, and pet. Manual choices persist and override automatic matching. Only automatic mode queries Herdr's theme endpoint; unavailable themes fall back to Catppuccin Mocha.
 

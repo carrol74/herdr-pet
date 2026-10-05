@@ -165,6 +165,7 @@ function renderOverview() {
   const rows = state.agents.map((agent) => {
     const row = document.createElement("div");
     row.className = "agent-row";
+    row.dataset.pane = agent.paneId;
     if (agent.paneId === state.subject?.paneId) row.classList.add("selected");
 
     const dot = document.createElement("span");
@@ -203,7 +204,14 @@ function renderOverview() {
     focus.dataset.action = "focus";
     focus.title = t("focus");
     focus.append(dot, details);
-    row.append(focus, message);
+    const header = document.createElement("div");
+    header.className = "agent-card-header";
+    header.append(focus, message);
+    const output = document.createElement("section");
+    output.className = "preview-card hidden";
+    output.setAttribute("aria-label", t("recentOutput"));
+    output.append(createLine(t("recentOutput"), "preview-label"), createLine("", "preview-text"));
+    row.append(header, output);
     const selectPreview = () => {
       previewPane = agent.paneId;
       refreshPreview();
@@ -226,10 +234,6 @@ function renderOverview() {
   list.append(...rows);
   content.push(list);
   if (state.blockedCount) content.push(createLine(`${state.blockedCount} ${t("attentionSummary")}`, "overview-summary"));
-  const output = document.createElement("section");
-  output.className = "preview-card";
-  output.append(createLine(t("recentOutput"), "preview-label"), createLine("", "preview-text"));
-  content.push(output);
   bubbleContent.replaceChildren(...content);
   updatePreviewDisplay();
   list.scrollTop = scrollTop;
@@ -441,20 +445,34 @@ function renderPrompt() {
 }
 
 function previewTarget() {
-  return state.agents.find((agent) => agent.paneId === previewPane) || state.subject || state.agents[0];
+  return state.agents.find((agent) => agent.paneId === previewPane)
+    || state.agents.find((agent) => agent.paneId === state.subject?.paneId)
+    || state.agents[0];
 }
 
 function updatePreviewDisplay() {
-  const node = bubbleContent.querySelector(".preview-text");
-  if (!node) return;
   const target = previewTarget();
   const key = target ? JSON.stringify([state.session, target.paneId]) : null;
   const same = preview.key === key;
-  node.textContent = same && preview.phase === "ready" ? preview.text || t("previewEmpty")
-    : same && preview.phase === "failed" ? t("previewUnavailable") : t("previewLoading");
-  node.classList.toggle("preview-placeholder", !same || preview.phase !== "ready" || !preview.text);
-  const label = bubbleContent.querySelector(".preview-label");
-  if (label && target) label.textContent = `${t("recentOutput")} · ${target.agent || "agent"}`;
+  let layoutChanged = false;
+  for (const row of bubbleContent.querySelectorAll(".agent-row")) {
+    const output = row.querySelector(".preview-card");
+    const selected = row.dataset.pane === target?.paneId;
+    if (selected !== row.classList.contains("preview-active")) layoutChanged = true;
+    row.classList.toggle("preview-active", selected);
+    output.classList.toggle("hidden", !selected);
+    if (!selected) continue;
+    const node = output.querySelector(".preview-text");
+    const ready = same && preview.phase === "ready" && Boolean(preview.text);
+    if (ready) {
+      node.replaceChildren(...preview.text.split("\n").map((line) => createLine(line, "preview-output-line")));
+    } else {
+      node.textContent = same && preview.phase === "ready" ? t("previewEmpty")
+        : same && preview.phase === "failed" ? t("previewUnavailable") : t("previewLoading");
+    }
+    node.classList.toggle("preview-placeholder", !ready);
+  }
+  if (layoutChanged && bubble.classList.contains("visible") && !promptTarget) positionBubble();
 }
 
 function refreshPreview() {
@@ -468,8 +486,14 @@ function refreshPreview() {
   preview = { key, phase: "loading", text: "", updatedAt: Date.now() };
   updatePreviewDisplay();
   invoke("agent_preview", { paneId: target.paneId, session })
-    .then((text) => { preview = { key, phase: "ready", text: previewText(text), updatedAt: Date.now() }; })
-    .catch(() => { preview = { key, phase: "failed", text: "", updatedAt: Date.now() }; })
+    .then((text) => {
+      if (state.session !== session || previewTarget()?.paneId !== target.paneId) return;
+      preview = { key, phase: "ready", text: previewText(text), updatedAt: Date.now() };
+    })
+    .catch(() => {
+      if (state.session !== session || previewTarget()?.paneId !== target.paneId) return;
+      preview = { key, phase: "failed", text: "", updatedAt: Date.now() };
+    })
     .finally(() => {
       previewPending = false;
       updatePreviewDisplay();
@@ -637,6 +661,10 @@ window.addEventListener("keydown", (event) => {
 });
 
 listen("pet-state", (event) => {
+  if (state.session !== event.payload.session) {
+    previewPane = null;
+    preview = { key: null, phase: "idle", text: "", updatedAt: 0 };
+  }
   state = event.payload;
   if (voice && voice.target.session !== state.session) cancelVoice();
   document.getElementById("prompt-form")?.dispatchEvent(new Event("voice-change"));
