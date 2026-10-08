@@ -92,6 +92,7 @@ function bubbleHeader(title, withBack = false) {
   menu.disabled = composer.sending || voice !== null;
   menu.addEventListener("click", () => {
     const rect = menu.getBoundingClientRect();
+    pointer.paused = true;
     invoke("show_settings_menu", {
       english: language === "en",
       theme: themeSelection,
@@ -101,7 +102,7 @@ function bubbleHeader(title, withBack = false) {
     }).catch((error) => {
       actionError = String(error);
       showBubble();
-    });
+    }).finally(() => { pointer.paused = false; });
   });
   header.append(menu);
   return header;
@@ -618,32 +619,23 @@ pet.addEventListener("dblclick", () => {
 
 pet.addEventListener("contextmenu", (event) => event.preventDefault());
 
-pet.addEventListener("mouseenter", () => {
-  hovered = true;
-  if (!dragging) showBubble();
-});
-
-pet.addEventListener("pointermove", (event) => {
+const pointer = new PetPointer(invoke, (target, position) => {
   if (dragging) return;
-  const rect = pet.getBoundingClientRect();
-  pet.style.setProperty("--look-x", `${Math.max(-3, Math.min(3, (event.clientX - rect.left - rect.width / 2) / (rect.width / 6)))}px`);
+  const wasHovered = hovered;
+  const wasBubbleHovered = bubbleHovered;
+  hovered = target === "pet";
+  bubbleHovered = target === "bubble";
+  if (hovered || bubbleHovered) cancelBubbleHide();
+  if (hovered) {
+    const rect = pet.getBoundingClientRect();
+    pet.style.setProperty("--look-x", `${clamp((position.x - rect.left - rect.width / 2) / (rect.width / 6), -3, 3)}px`);
+    if (!wasHovered) showBubble();
+  } else {
+    pet.style.removeProperty("--look-x");
+  }
+  if (!hovered && !bubbleHovered && (wasHovered || wasBubbleHovered)) scheduleBubbleHide();
 });
-
-pet.addEventListener("mouseleave", () => {
-  pet.style.removeProperty("--look-x");
-  hovered = false;
-  scheduleBubbleHide();
-});
-
-bubble.addEventListener("mouseenter", () => {
-  bubbleHovered = true;
-  cancelBubbleHide();
-});
-
-bubble.addEventListener("mouseleave", () => {
-  bubbleHovered = false;
-  scheduleBubbleHide();
-});
+pointer.poll();
 
 listen("pet-language", (event) => {
   if (voiceBusy()) return;
@@ -756,6 +748,7 @@ listen("pet-voice", (event) => {
 invoke("set_theme_follow", { follow: themeSelection === "auto" });
 setInterval(refreshPreview, 5000);
 window.addEventListener("beforeunload", cancelVoice);
+window.addEventListener("beforeunload", () => pointer.stop());
 
 listen("pet-skin", (event) => {
   skinSelection = selectedSkin(event.payload);

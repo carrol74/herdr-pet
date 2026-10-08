@@ -16,6 +16,7 @@ mod menu;
 mod monitor;
 mod platform;
 mod plugin_control;
+mod pointer;
 mod preview;
 mod state;
 mod transport;
@@ -414,6 +415,8 @@ fn main() {
             set_pet_size,
             start_drag,
             set_prompt_active,
+            pointer::pointer_position,
+            pointer::set_pointer_interactive,
             focus_agent,
             send_prompt,
             menu::show_settings_menu,
@@ -465,6 +468,7 @@ fn main() {
                 window.set_position(Position::Physical(PhysicalPosition::new(x, y)))?;
             }
             platform::configure_window(&window)?;
+            window.set_ignore_cursor_events(true)?;
             start_position_worker(window.clone(), settings, Arc::clone(&pet_size));
             window.show()?;
             if let Some(server) = &setup_plugin_server {

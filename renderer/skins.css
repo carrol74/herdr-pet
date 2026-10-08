@@ -8,6 +8,7 @@
 .pet-art[data-state="unknown"] { --status: var(--pet-unknown, #6c7086); }
 .pet-art[data-state="offline"] { --status: var(--pet-muted, #a6adc8); }
 #pet svg { display: block; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
+#pet .character :is(path, rect, circle, ellipse, line, polyline, polygon) { pointer-events: visiblePainted; }
 .pet-response { width: 100%; height: 100%; transition: transform 180ms ease-out; }
 #pet:hover .pet-response { transform: translateY(-1px); }
 #pet.dragging .pet-response { transform: rotate(-4deg); }

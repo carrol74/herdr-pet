@@ -43,6 +43,16 @@ pub fn primary_mouse_button_down() -> bool {
     NSEvent::pressedMouseButtons() & 1 != 0
 }
 
+pub fn pointer_position(window: &WebviewWindow) -> Result<tauri::LogicalPosition<f64>, String> {
+    let pointer = window.ns_window().map_err(|error| error.to_string())?;
+    let window = unsafe { &*pointer.cast::<NSWindow>() };
+    // 只读取窗口的坐标值，不获取或释放由 Wry 管理的 contentView。
+    let point = window.mouseLocationOutsideOfEventStream();
+    let bounds = window.contentLayoutRect();
+    let y = bounds.origin.y + bounds.size.height - point.y;
+    Ok(tauri::LogicalPosition::new(point.x - bounds.origin.x, y))
+}
+
 pub fn set_prompt_active(window: &WebviewWindow, active: bool) -> tauri::Result<()> {
     let pointer = window.ns_window()?;
     let window = unsafe { &*pointer.cast::<NSWindow>() };
