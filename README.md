@@ -6,9 +6,13 @@ Herdr 的独立桌面宠物插件，支持 macOS 和 Windows。显示 agent 状�
 
 ## 安装与启动
 
-需要 Herdr 0.9.0+、Node.js 20+、Rust 工具链及 [Tauri 2 系统依赖](https://v2.tauri.app/start/prerequisites/)。语音构建还需要 CMake、C++ 编译器和 libclang：macOS 使用 Xcode Command Line Tools，Windows 使用 Visual Studio 的“使用 C++ 的桌面开发”、Windows SDK 和 LLVM。Windows 请使用原生 PowerShell 和 MSVC Rust 工具链。
+需要 Herdr 0.7.5+、Node.js 20+、Rust 工具链及 [Tauri 2 系统依赖](https://v2.tauri.app/start/prerequisites/)。macOS 最低支持 11.0，编译目标已在 Tauri 配置中设置。语音构建还需要 CMake、C++ 编译器和 libclang：macOS 使用 Xcode Command Line Tools，并单独安装 CMake（`brew install cmake`）；Windows 使用 Visual Studio 的“使用 C++ 的桌面开发”、Windows SDK 和 LLVM。Windows 请使用原生 PowerShell 和 MSVC Rust 工具链。
 
-先在另一个终端启动 Herdr，再在本仓库运行：
+官方 Herdr 从 [0.7.0](https://github.com/herdrdev/herdr/releases/tag/v0.7.0) 起提供插件功能；本插件使用的 `agent.prompt` 在 [0.7.5](https://github.com/herdrdev/herdr/releases/tag/v0.7.5) 中加入，因此清单声明 `min_herdr_version = "0.7.5"`。该版本也提供所需的 agent 列表、读取、聚焦、状态订阅以及插件构建和运行环境。自动主题与窗口激活依赖可选接口，不提高最低版本要求。
+
+安装前用 `herdr --version` 查看命令行版本，低于 0.7.5 时可运行 `herdr update` 升级。更新后还需确保正在运行的 Herdr 会话使用 0.7.5 或更高版本。
+
+先在 Herdr 外的终端窗口启动官方 Herdr，再在本仓库运行以下命令。这些构建及插件命令也可以在该 Herdr 会话的 pane 内执行：
 
 ```sh
 npm ci

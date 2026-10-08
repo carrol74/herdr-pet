@@ -6,9 +6,13 @@ A standalone desktop pet plugin for Herdr on macOS and Windows. Shows agent stat
 
 ## Install and start
 
-Requirements: Herdr 0.9.0+, Node.js 20+, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/). Voice builds also need CMake, a C++ compiler, and libclang: Xcode Command Line Tools on macOS; Visual Studio Desktop development with C++, Windows SDK, and LLVM on Windows. Use native PowerShell and the MSVC Rust toolchain on Windows.
+Requirements: Herdr 0.7.5+, Node.js 20+, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/). macOS requires 11.0 or later; the build target is set in the Tauri configuration. Voice builds also need CMake, a C++ compiler, and libclang: on macOS, install Xcode Command Line Tools and CMake separately (`brew install cmake`); on Windows, install Visual Studio Desktop development with C++, Windows SDK, and LLVM. Use native PowerShell and the MSVC Rust toolchain on Windows.
 
-Start Herdr in another terminal, then run from this repository:
+Official Herdr introduced plugins in [0.7.0](https://github.com/herdrdev/herdr/releases/tag/v0.7.0). This plugin uses `agent.prompt`, introduced in [0.7.5](https://github.com/herdrdev/herdr/releases/tag/v0.7.5), so its manifest declares `min_herdr_version = "0.7.5"`. That version also provides the required agent listing, reads, focus, status subscriptions, plugin builds, and runtime environment. Automatic themes and terminal activation use optional endpoints and do not raise the minimum version.
+
+Check the CLI version with `herdr --version` before installation. If it is below 0.7.5, use `herdr update` to upgrade, then ensure the running Herdr session also uses 0.7.5 or later.
+
+Start official Herdr in a terminal window outside Herdr, then run these commands from this repository. You can also run these build and plugin commands inside a pane of that Herdr session:
 
 ```sh
 npm ci

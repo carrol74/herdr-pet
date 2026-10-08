@@ -51,7 +51,7 @@ mod tests {
         std::fs::create_dir_all(&directory).expect("temporary directory");
         let path = directory.join(format!("control-test-{}.sock", std::process::id()));
         let listener = ListenerOptions::new()
-            .name(path.to_fs_name::<GenericFilePath>().expect("name"))
+            .name(path.as_path().to_fs_name::<GenericFilePath>().expect("name"))
             .create_sync()
             .expect("listener");
         let server = std::thread::spawn(move || {
@@ -61,7 +61,7 @@ mod tests {
             stream.write_all(b"k\n").expect("last fragment");
         });
         let mut stream = interprocess::local_socket::Stream::connect(
-            path.to_fs_name::<GenericFilePath>().expect("name"),
+            path.as_path().to_fs_name::<GenericFilePath>().expect("name"),
         )
         .expect("connect");
         assert_eq!(

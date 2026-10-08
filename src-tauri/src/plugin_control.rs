@@ -1,5 +1,5 @@
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -49,7 +49,7 @@ fn read_line(stream: &mut interprocess::local_socket::Stream) -> io::Result<Vec<
     crate::transport::read_line(stream, Duration::from_secs(2), 16)
 }
 
-fn send_show(endpoint: &PathBuf) -> io::Result<()> {
+fn send_show(endpoint: &Path) -> io::Result<()> {
     let mut stream =
         interprocess::local_socket::Stream::connect(endpoint.to_fs_name::<GenericFilePath>()?)?;
     stream.write_all(b"show\n")?;
