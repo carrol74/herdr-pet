@@ -19,6 +19,35 @@ pub enum Control {
     SetThemeFollow(bool),
 }
 
+#[derive(Default)]
+struct ThemeMonitor {
+    follow: bool,
+    supported: Option<bool>,
+}
+
+impl ThemeMonitor {
+    fn read(&mut self, path: &std::path::Path) -> Option<api::ClientTheme> {
+        if self.supported == Some(false) || (!self.follow && self.supported == Some(true)) {
+            return None;
+        }
+        match api::client_theme(path) {
+            Ok(theme) => {
+                self.supported = Some(true);
+                if self.follow {
+                    theme
+                } else {
+                    None
+                }
+            }
+            Err(api::ApiError::UnsupportedMethod(_)) => {
+                self.supported = Some(false);
+                None
+            }
+            Err(_) => None,
+        }
+    }
+}
+
 pub fn start(app: AppHandle, state: Arc<Mutex<SharedState>>) -> Sender<Control> {
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || run_loop(app, state, receiver));
@@ -106,7 +135,7 @@ fn publish(app: &AppHandle, state: &Arc<Mutex<SharedState>>) {
 }
 
 fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<Control>) {
-    let mut theme_follow = false;
+    let mut theme = ThemeMonitor::default();
     let mut session = api::active_session();
     let mut path = api::socket_path();
     let mut selected_pane: Option<String> = None;
@@ -118,7 +147,7 @@ fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<C
         while let Ok(control) = controls.try_recv() {
             match control {
                 Control::SetThemeFollow(follow) => {
-                    theme_follow = follow;
+                    theme.follow = follow;
                     reconcile_at = Instant::now();
                 }
                 Control::SelectAgent(pane_id) => {
@@ -133,6 +162,7 @@ fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<C
                         selected_pane = None;
                         status_clock.clear();
                         subscription = None;
+                        theme.supported = None;
                         reconcile_at = Instant::now();
                     }
                 }
@@ -147,7 +177,7 @@ fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<C
                 &mut selected_pane,
                 &mut status_clock,
                 &mut subscription,
-                theme_follow,
+                &mut theme,
             );
             publish(&app, &state);
             reconcile_at = Instant::now() + RECONCILE_INTERVAL;
@@ -160,7 +190,11 @@ fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<C
                     publish(&app, &state);
                 }
                 Ok(_) => {}
-                Err(_) => subscription = None,
+                Err(_) => {
+                    subscription = None;
+                    theme.supported = None;
+                    reconcile_at = Instant::now();
+                }
             }
         }
         std::thread::sleep(POLL_INTERVAL);
@@ -174,7 +208,7 @@ fn reconcile(
     selected_pane: &mut Option<String>,
     status_clock: &mut HashMap<String, (AgentStatus, u64)>,
     subscription: &mut Option<Subscription>,
-    theme_follow: bool,
+    theme_monitor: &mut ThemeMonitor,
 ) {
     let sessions = api::available_sessions(session)
         .into_iter()
@@ -186,11 +220,7 @@ fn reconcile(
 
     match api::agent_list(path) {
         Ok(agent_data) => {
-            let theme = if theme_follow {
-                api::client_theme(path).ok().flatten()
-            } else {
-                None
-            };
+            let theme = theme_monitor.read(path);
             let now = now_ms();
             status_clock
                 .retain(|pane_id, _| agent_data.iter().any(|agent| agent.pane_id == *pane_id));
@@ -249,6 +279,7 @@ fn reconcile(
                     sessions,
                     offline_reason: None,
                     theme,
+                    theme_supported: theme_monitor.supported == Some(true),
                 };
             }
             if pane_ids.is_empty() {
@@ -262,6 +293,7 @@ fn reconcile(
         }
         Err(error) => {
             *subscription = None;
+            theme_monitor.supported = None;
             let mut shared = state
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -269,6 +301,7 @@ fn reconcile(
             shared.snapshot.connection = Connection::Offline;
             if shared.snapshot.session != session {
                 shared.snapshot.theme = None;
+                shared.snapshot.theme_supported = false;
             }
             shared.snapshot.mood = Mood::Offline;
             shared.snapshot.subject = None;

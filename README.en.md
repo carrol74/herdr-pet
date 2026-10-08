@@ -80,9 +80,9 @@ Manage macOS permission in System Settings → Privacy & Security → Microphone
 | --- | --- | --- |
 | Status, previews, prompts, pane focus | Existing endpoints | Supported |
 | Six manual themes | Supported | Supported |
-| Match the actual Herdr theme | Catppuccin fallback | Enabled with `client.theme.get` |
-| Bring the terminal window forward | Notice confirms pane focus without activation | Enabled when `client.activate` and the terminal support it |
+| Match the actual Herdr theme | Automatic option hidden; manual theme or default Catppuccin | Shown and enabled with `client.theme.get` |
+| Bring the terminal window forward | Pane focus only, without an unavailable-feature notice | Enabled when `client.activate` and the terminal support it |
 
-Optional endpoints are not guaranteed by the version number. Their absence does not turn successful focus or submission into a failure. If an existing activation endpoint fails, the pet reports successful focus and the activation failure separately. The companion fork currently implements activation for Herdr running directly in Ghostty on macOS; other terminals, tmux, GNU Screen, and Windows activation depend on Herdr-side support.
+Optional endpoints are not guaranteed by the version number. When the activation endpoint or terminal does not support activation, pane focus completes without a notice. If a supported activation request fails due to permissions, a timeout, or another error, the pet reports successful focus and the activation failure separately. The companion fork currently implements activation for Herdr running directly in Ghostty on macOS; other terminals, tmux, GNU Screen, and Windows activation depend on Herdr-side support.
 
 The transparent frameless window stays on top. Dragging and display changes keep the pet visible. macOS supports Spaces and ordinary fullscreen windows; the composer lowers the window level for native IME candidates. Windows uses native topmost behavior and window dragging. Lock screens and secure desktops are outside the overlay's scope.

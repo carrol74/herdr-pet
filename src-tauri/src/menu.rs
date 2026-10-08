@@ -34,6 +34,11 @@ pub fn show_settings_menu(
     }
     let skins = skins.build().map_err(|e| e.to_string())?;
     let mut themes = SubmenuBuilder::new(app, if english { "Theme" } else { "主题" });
+    let selected_theme = if theme == "auto" && !snapshot.theme_supported {
+        "catppuccin"
+    } else {
+        theme.as_str()
+    };
     for (id, title) in [
         (
             "auto",
@@ -50,8 +55,11 @@ pub fn show_settings_menu(
         ("gruvbox", "Gruvbox Dark"),
         ("gruvbox-light", "Gruvbox Light"),
     ] {
+        if id == "auto" && !snapshot.theme_supported {
+            continue;
+        }
         let item = CheckMenuItemBuilder::with_id(format!("theme:{id}"), title)
-            .checked(theme == id)
+            .checked(selected_theme == id)
             .build(app)
             .map_err(|e| e.to_string())?;
         themes = themes.item(&item);

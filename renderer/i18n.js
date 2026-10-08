@@ -18,7 +18,6 @@ const PET_TRANSLATIONS = {
     voiceDownloadError: "Could not download the model. Click the microphone to retry.",
     voiceModelError: "Could not load the model. Remove ggml-base.bin from the app's models directory and retry.",
     voiceTranscribeError: "Could not transcribe audio. Your typed draft is safe.", voiceNoSpeech: "No speech was detected.",
-    activationUnavailable: "Agent selected. This Herdr or terminal cannot bring the window to the front automatically.",
     agentCount: "agents", attentionSummary: "need attention", localVoice: "Local voice input · downloads a 142 MiB model on first use",
   },
   zh: {
@@ -40,7 +39,6 @@ const PET_TRANSLATIONS = {
     voiceDownloadError: "模型下载失败，点击麦克风重试。",
     voiceModelError: "模型加载失败，请删除应用 models 目录中的 ggml-base.bin 后重试。",
     voiceTranscribeError: "语音转写失败，已输入的草稿仍然保留。", voiceNoSpeech: "没有检测到语音。",
-    activationUnavailable: "已切换 agent。当前 Herdr 或终端无法自动吊起窗口。",
     agentCount: "个 agent", attentionSummary: "个需要处理", localVoice: "本机语音输入 · 首次使用下载 142 MiB 模型",
   },
 };

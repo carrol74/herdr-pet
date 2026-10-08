@@ -51,7 +51,6 @@ let hideTimer = null;
 let dragging = false;
 let promptTarget = null;
 let actionError = null;
-let actionNotice = false;
 const composer = new PromptState();
 let voice = null;
 let voiceSequence = 0;
@@ -229,7 +228,7 @@ function renderOverview() {
     return row;
   });
   const content = [title];
-  if (actionError) content.push(createLine(errorLabel(actionError), actionNotice ? "action-notice" : "action-error"));
+  if (actionError) content.push(createLine(errorLabel(actionError), "action-error"));
   const list = document.createElement("div");
   list.className = "agent-list";
   list.append(...rows);
@@ -671,7 +670,6 @@ listen("pet-layout", (event) => {
 });
 listen("pet-drag-ended", finishDrag);
 listen("pet-error", (event) => {
-  actionNotice = false;
   actionError = String(event.payload);
   if (promptTarget) {
     const feedback = document.querySelector(".prompt-feedback");
@@ -714,18 +712,6 @@ listen("pet-theme", (event) => {
   applyTheme(state.theme);
   draw();
   invoke("set_theme_follow", { follow: themeSelection === "auto" });
-});
-
-listen("pet-notice", (event) => {
-  actionNotice = true;
-  actionError = t(event.payload);
-  showBubble();
-  setTimeout(() => {
-    if (!actionNotice) return;
-    actionError = null;
-    actionNotice = false;
-    if (!promptTarget && bubble.classList.contains("visible")) renderOverview();
-  }, 6000);
 });
 
 listen("pet-voice", (event) => {

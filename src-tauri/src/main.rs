@@ -250,7 +250,6 @@ fn run_focus_request(window: WebviewWindow, path: PathBuf, pane_id: String) {
                 error,
                 api::ApiError::UnsupportedMethod(_) | api::ApiError::ActivationUnavailable
             ) {
-                let _ = window.emit("pet-notice", "activationUnavailable");
                 return;
             }
             let _ = window.emit(

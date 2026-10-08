@@ -63,6 +63,7 @@ pub struct PetState {
     pub sessions: Vec<SessionInfo>,
     pub offline_reason: Option<String>,
     pub theme: Option<crate::api::ClientTheme>,
+    pub theme_supported: bool,
 }
 
 impl Default for PetState {
@@ -77,6 +78,7 @@ impl Default for PetState {
             sessions: Vec::new(),
             offline_reason: None,
             theme: None,
+            theme_supported: false,
         }
     }
 }
