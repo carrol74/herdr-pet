@@ -367,7 +367,7 @@ function renderPrompt() {
     update();
     positionBubble();
     const id = voice.id;
-    invoke("voice_start", { id, language }).catch((error) => {
+    invoke("voice_start", { id }).catch((error) => {
       if (voice?.id !== id) return;
       voice = null;
       feedback.textContent = errorLabel(error);

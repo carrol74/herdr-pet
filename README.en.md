@@ -64,7 +64,7 @@ The composer has a back button at the upper left and microphone/send buttons ins
 
 The first microphone click requests permission, downloads multilingual Whisper Base, and loads it. The approximately 142 MiB model comes from the [whisper.cpp model repository](https://github.com/ggml-org/whisper.cpp/blob/master/models/README.md); Rust inference uses [whisper-rs](https://docs.rs/whisper-rs/0.16.0/whisper_rs/).
 
-Recording starts after preparation. Click again to stop; recording stops automatically at 60 seconds. Transcription is inserted at the original cursor or replaces selected text. Review the draft and send manually. The Chinese interface recognizes Chinese; the English interface recognizes English. Cancel is available during preparation, recording, or transcription. Cancellation and failures preserve the typed draft.
+Recording starts after preparation. Click again to stop; recording stops automatically at 60 seconds. Transcription is inserted at the original cursor or replaces selected text. Review the draft and send manually. The recording language is detected automatically for transcription in that language, with translation disabled. The interface language controls only menus and messages. Cancel is available during preparation, recording, or transcription. Cancellation and failures preserve the typed draft.
 
 Audio stays in memory: it is neither uploaded nor saved as an audio file. Only the initial model download requires a network connection; later transcription works offline. The cached model is `models/ggml-base.bin` inside the app's local data directory. Retry download errors by clicking again; remove a damaged model to download it again:
 

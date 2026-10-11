@@ -55,7 +55,7 @@ impl VoiceEvent {
 }
 
 enum Control {
-    Start { id: u64, language: String },
+    Start { id: u64 },
     Stop(u64),
     Cancel,
 }
@@ -73,7 +73,7 @@ impl VoiceService {
         std::thread::spawn(move || {
             let mut context = None;
             while let Ok(command) = receiver.recv() {
-                let Control::Start { id, language } = command else {
+                let Control::Start { id } = command else {
                     continue;
                 };
                 if worker_active.load(Ordering::Acquire) != id {
@@ -89,7 +89,6 @@ impl VoiceService {
                     &directory,
                     &worker_active,
                     id,
-                    &language,
                     &mut context,
                     &emit,
                 );
@@ -120,19 +119,15 @@ impl VoiceService {
 }
 
 #[tauri::command]
-pub fn voice_start(
-    service: State<'_, VoiceService>,
-    id: u64,
-    language: String,
-) -> Result<(), String> {
-    if id == 0 || !matches!(language.as_str(), "zh" | "en") {
+pub fn voice_start(service: State<'_, VoiceService>, id: u64) -> Result<(), String> {
+    if id == 0 {
         return Err("Invalid voice request".into());
     }
     service
         .active
         .compare_exchange(0, id, Ordering::AcqRel, Ordering::Acquire)
         .map_err(|_| "Voice input is already active".to_string())?;
-    if let Err(error) = service.sender.send(Control::Start { id, language }) {
+    if let Err(error) = service.sender.send(Control::Start { id }) {
         service.active.store(0, Ordering::Release);
         return Err(error.to_string());
     }
@@ -159,7 +154,6 @@ fn record_and_transcribe(
     directory: &std::path::Path,
     active: &Arc<AtomicU64>,
     id: u64,
-    language: &str,
     context: &mut Option<WhisperContext>,
     emit: &impl Fn(VoiceEvent),
 ) -> Result<String, VoiceError> {
@@ -217,7 +211,7 @@ fn record_and_transcribe(
         .create_state()
         .map_err(|e| VoiceError::new("voiceTranscribeError", e))?;
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    params.set_language(Some(language));
+    params.set_language(None);
     params.set_translate(false);
     params.set_n_threads(std::thread::available_parallelism().map_or(2, |n| n.get().min(4)) as i32);
     params.set_print_special(false);
