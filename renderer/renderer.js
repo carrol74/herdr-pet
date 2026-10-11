@@ -57,6 +57,7 @@ let voiceSequence = 0;
 let previewPane = null;
 let preview = { key: null, phase: "idle", text: "", updatedAt: 0 };
 let previewPending = false;
+let cleanPreview = localStorage.getItem("herdr-pet-preview") !== "raw";
 
 
 function updateLanguage() {
@@ -96,6 +97,7 @@ function bubbleHeader(title, withBack = false) {
       english: language === "en",
       theme: themeSelection,
       skin: skinSelection,
+      cleanPreview,
       menuX: rect.left,
       menuY: rect.bottom,
     }).catch((error) => {
@@ -146,6 +148,8 @@ function createLine(text, className = "bubble-line") {
 }
 
 function renderOverview() {
+  const output = bubbleContent.querySelector(".preview-text");
+  if (output) preview.scrollTop = output.scrollTop;
   const scrollTop = bubbleContent.querySelector(".agent-list")?.scrollTop || 0;
   const focused = document.activeElement?.dataset;
   const focusedPane = focused?.pane;
@@ -207,11 +211,7 @@ function renderOverview() {
     const header = document.createElement("div");
     header.className = "agent-card-header";
     header.append(focus, message);
-    const output = document.createElement("section");
-    output.className = "preview-card hidden";
-    output.setAttribute("aria-label", t("recentOutput"));
-    output.append(createLine(t("recentOutput"), "preview-label"), createLine("", "preview-text"));
-    row.append(header, output);
+    row.append(header);
     const selectPreview = () => {
       previewPane = agent.paneId;
       refreshPreview();
@@ -452,25 +452,37 @@ function previewTarget() {
 
 function updatePreviewDisplay() {
   const target = previewTarget();
-  const key = target ? JSON.stringify([state.session, target.paneId]) : null;
+  const key = previewIdentity(state.session, target);
   const same = preview.key === key;
+  const content = previewText(preview.text, { clean: cleanPreview, cwd: target?.cwd });
   let layoutChanged = false;
   for (const row of bubbleContent.querySelectorAll(".agent-row")) {
-    const output = row.querySelector(".preview-card");
-    const selected = row.dataset.pane === target?.paneId;
-    if (selected !== row.classList.contains("preview-active")) layoutChanged = true;
-    row.classList.toggle("preview-active", selected);
-    output.classList.toggle("hidden", !selected);
-    if (!selected) continue;
-    const node = output.querySelector(".preview-text");
-    const ready = same && preview.phase === "ready" && Boolean(preview.text);
-    if (ready) {
-      node.replaceChildren(...preview.text.split("\n").map((line) => createLine(line, "preview-output-line")));
-    } else {
-      node.textContent = same && preview.phase === "ready" ? t("previewEmpty")
-        : same && preview.phase === "failed" ? t("previewUnavailable") : t("previewLoading");
+    let output = row.querySelector(".preview-card");
+    const visible = row.dataset.pane === target?.paneId
+      && same && preview.phase === "ready" && Boolean(content.trim());
+    if (visible !== Boolean(output)) layoutChanged = true;
+    row.classList.toggle("preview-active", visible);
+    if (!visible) {
+      output?.remove();
+      continue;
     }
-    node.classList.toggle("preview-placeholder", !ready);
+    if (!output) {
+      output = document.createElement("section");
+      output.className = "preview-card";
+      output.setAttribute("aria-label", t("recentOutput"));
+      output.append(createLine(t("recentOutput"), "preview-label"), createLine("", "preview-text"));
+      row.append(output);
+      output.querySelector(".preview-text").addEventListener("scroll", (event) => {
+        if (preview.key === key) preview.scrollTop = event.currentTarget.scrollTop;
+      });
+    }
+    const text = output.querySelector(".preview-text");
+    if (text.textContent !== content) {
+      const follow = Boolean(text.textContent) && text.scrollHeight > text.clientHeight
+        && text.scrollHeight - text.clientHeight - text.scrollTop <= 2;
+      text.textContent = content;
+      text.scrollTop = follow ? text.scrollHeight : preview.scrollTop || 0;
+    }
   }
   if (layoutChanged && bubble.classList.contains("visible") && !promptTarget) positionBubble();
 }
@@ -479,27 +491,30 @@ function refreshPreview() {
   if (!bubble.classList.contains("visible") || promptTarget || !state.agents.length) return;
   const target = previewTarget();
   const session = state.session;
-  const key = JSON.stringify([session, target.paneId]);
+  const key = previewIdentity(session, target);
   updatePreviewDisplay();
-  if (previewPending || (preview.key === key && Date.now() - preview.updatedAt < 5000)) return;
+  if (previewPending || (preview.key === key && Date.now() - preview.updatedAt < 1000)) return;
   previewPending = true;
-  preview = { key, phase: "loading", text: "", updatedAt: Date.now() };
+  const requestedAt = Date.now();
+  if (preview.key !== key) preview = { key, phase: "loading", text: "", updatedAt: requestedAt };
   updatePreviewDisplay();
-  invoke("agent_preview", { paneId: target.paneId, session })
-    .then((text) => {
-      if (state.session !== session || previewTarget()?.paneId !== target.paneId) return;
-      preview = { key, phase: "ready", text: previewText(text), updatedAt: Date.now() };
+  invoke("agent_preview", { paneId: target.paneId, session, terminalId: target.terminalId ?? null,
+    agentSession: target.agentSession ?? null })
+    .then((result) => {
+      if (previewIdentity(state.session, previewTarget()) !== key) return;
+      preview = { key, phase: result.phase, text: result.text,
+        scrollTop: preview.scrollTop || 0, updatedAt: requestedAt };
     })
     .catch(() => {
-      if (state.session !== session || previewTarget()?.paneId !== target.paneId) return;
-      preview = { key, phase: "failed", text: "", updatedAt: Date.now() };
+      if (previewIdentity(state.session, previewTarget()) !== key) return;
+      preview = { key, phase: "failed", text: "", updatedAt: requestedAt };
     })
     .finally(() => {
       previewPending = false;
       updatePreviewDisplay();
       if (bubble.classList.contains("visible") && !promptTarget) {
         positionBubble();
-        if (JSON.stringify([state.session, previewTarget()?.paneId]) !== key) refreshPreview();
+        if (previewIdentity(state.session, previewTarget()) !== key) refreshPreview();
       }
     });
 }
@@ -551,6 +566,7 @@ function showBubble() {
     renderOverview();
   }
   bubble.classList.add("visible");
+  petSkin.setInteracting(true);
   positionBubble();
   refreshPreview();
 }
@@ -566,6 +582,7 @@ function hideBubble(force = false) {
   cancelBubbleHide();
   if (force || (!promptTarget && !hovered && !bubbleHovered)) {
     bubble.classList.remove("visible");
+    petSkin.setInteracting(hovered || bubbleHovered);
   }
 }
 
@@ -593,6 +610,8 @@ function finishDrag() {
   if (!dragging) return;
   dragging = false;
   pet.classList.remove("dragging");
+  petSkin.setDragging(false);
+  petSkin.setInteracting(hovered || bubbleHovered || bubble.classList.contains("visible"));
   petSkin.settle();
 }
 
@@ -605,6 +624,7 @@ pet.addEventListener("pointerdown", (event) => {
   closePrompt();
   hideBubble(true);
   pet.classList.add("dragging");
+  petSkin.setDragging(true);
   invoke("start_drag").catch(finishDrag);
 });
 
@@ -732,9 +752,22 @@ listen("pet-voice", (event) => {
 });
 
 invoke("set_theme_follow", { follow: themeSelection === "auto" });
-setInterval(refreshPreview, 5000);
+listen("pet-preview", (event) => {
+  cleanPreview = event.payload === "clean";
+  localStorage.setItem("herdr-pet-preview", cleanPreview ? "clean" : "raw");
+  preview.scrollTop = 0;
+  if (bubble.classList.contains("visible") && !promptTarget) {
+    renderOverview();
+    const output = bubbleContent.querySelector(".preview-text");
+    if (output) output.scrollTop = 0;
+    preview.scrollTop = 0;
+    positionBubble();
+  }
+});
+setInterval(refreshPreview, 1000);
 window.addEventListener("beforeunload", cancelVoice);
 window.addEventListener("beforeunload", () => pointer.stop());
+window.addEventListener("beforeunload", () => petSkin.stop());
 
 listen("pet-skin", (event) => {
   skinSelection = selectedSkin(event.payload);
@@ -744,5 +777,5 @@ listen("pet-skin", (event) => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  pet.dataset.hidden = String(document.hidden);
+  petSkin.updateVisibility();
 });
