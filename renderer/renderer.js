@@ -1,6 +1,7 @@
 const GAP = 8;
 const MARGIN = 6;
 const HOVER_EXIT_DELAY = 160;
+const RETURN_EXIT_DELAY = 1500;
 const DEFAULT_LAYOUT = { petLeft: 12, petTop: Math.max(0, innerHeight - document.getElementById("pet").offsetHeight - 12) };
 
 let currentTheme = null;
@@ -48,12 +49,14 @@ let layout = { ...DEFAULT_LAYOUT };
 let hovered = false;
 let bubbleHovered = false;
 let hideTimer = null;
+let bubbleReturnUntil = 0;
 let dragging = false;
 let promptTarget = null;
 let actionError = null;
 const composer = new PromptState();
 let voice = null;
 let voiceSequence = 0;
+let sendFeedbackTimer = null;
 
 
 function updateLanguage() {
@@ -75,7 +78,7 @@ function bubbleHeader(title, withBack = false) {
     back.title = t("back");
     back.setAttribute("aria-label", t("back"));
     back.disabled = composer.sending;
-    back.addEventListener("click", closePrompt);
+    back.addEventListener("click", () => closePrompt(true));
     header.append(back);
   }
   header.append(createLine(title, "bubble-title"));
@@ -178,6 +181,7 @@ function renderOverview() {
     message.title = t("message");
     message.addEventListener("click", (event) => {
       event.stopPropagation();
+      bubbleReturnUntil = 0;
       promptTarget = { ...agent, session: state.session };
       showBubble();
     });
@@ -226,11 +230,20 @@ function buttonIcon(button, kind) {
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
   const path = document.createElementNS(svg.namespaceURI, "path");
-  path.setAttribute("d", kind === "microphone"
-    ? "M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm-7-3a7 7 0 0 0 14 0M12 19v3M8 22h8"
-    : "M12 19V5M6 11l6-6 6 6");
+  const paths = {
+    microphone: "M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm-7-3a7 7 0 0 0 14 0M12 19v3M8 22h8",
+    send: "M12 19V5M6 11l6-6 6 6",
+    sending: "M20 12a8 8 0 1 1-8-8",
+    submitted: "M5 12l4 4L19 6",
+  };
+  path.setAttribute("d", paths[kind]);
   svg.append(path);
   button.replaceChildren(svg);
+}
+
+function clearSendFeedback() {
+  clearTimeout(sendFeedbackTimer);
+  sendFeedbackTimer = null;
 }
 
 function cancelVoice() {
@@ -246,6 +259,7 @@ function cancelVoice() {
 function renderPrompt() {
   if (document.getElementById("prompt-form")) return;
   const target = promptTarget;
+  let submitted = false;
   const form = document.createElement("form");
   form.id = "prompt-form";
   const title = bubbleHeader(`${t("to")} ${target.agent || "agent"}`, true);
@@ -310,6 +324,13 @@ function renderPrompt() {
     composer.save(target, input.value);
     const busy = voiceBusy();
     count.textContent = `${input.value.length} / ${input.maxLength}`;
+    const sendState = composer.sending ? "sending" : submitted ? "submitted" : "send";
+    if (submit.dataset.state !== sendState) {
+      submit.dataset.state = sendState;
+      buttonIcon(submit, sendState);
+      submit.setAttribute("aria-label", t(sendState));
+    }
+    form.setAttribute("aria-busy", String(composer.sending));
     submit.disabled = composer.sending || busy || !input.value.trim() || state.session !== target.session;
     mic.disabled = composer.sending || (busy && voice.phase !== "recording");
     mic.classList.toggle("recording", voice?.phase === "recording");
@@ -339,7 +360,7 @@ function renderPrompt() {
       const inserted = insertTranscript(input.value, result.start, result.end, result.text || "", input.maxLength);
       input.value = inserted.text;
       input.setSelectionRange(inserted.cursor, inserted.cursor);
-      feedback.textContent = t("voiceInserted");
+      feedback.textContent = "";
       feedback.classList.remove("action-error");
     } else {
       feedback.textContent = `${t(result.code || "voiceTranscribeError")}${result.detail ? ` ${result.detail}` : ""}`;
@@ -375,7 +396,11 @@ function renderPrompt() {
       update();
     });
   });
-  input.addEventListener("input", update);
+  input.addEventListener("input", () => {
+    clearSendFeedback();
+    submitted = false;
+    update();
+  });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing) {
       event.preventDefault();
@@ -389,14 +414,21 @@ function renderPrompt() {
     const text = input.value.trim();
     if (!composer.begin(target)) return;
     title.querySelector(".bubble-back").disabled = true;
-    feedback.textContent = t("submitting");
+    clearSendFeedback();
+    submitted = false;
+    feedback.textContent = "";
     feedback.classList.remove("action-error");
     update();
     invoke("send_prompt", { paneId: target.paneId, text, session: target.session })
       .then(() => {
         composer.finish(true);
         input.value = "";
-        feedback.textContent = t("submitted");
+        submitted = true;
+        sendFeedbackTimer = setTimeout(() => {
+          sendFeedbackTimer = null;
+          submitted = false;
+          if (form.isConnected) update();
+        }, 1500);
       })
       .catch((error) => {
         composer.finish(false);
@@ -472,6 +504,7 @@ function cancelBubbleHide() {
 function hideBubble(force = false) {
   cancelBubbleHide();
   if (force || (!promptTarget && !hovered && !bubbleHovered)) {
+    bubbleReturnUntil = 0;
     bubble.classList.remove("visible");
     petSkin.setInteracting(hovered || bubbleHovered);
   }
@@ -483,18 +516,28 @@ function scheduleBubbleHide() {
   hideTimer = setTimeout(() => {
     hideTimer = null;
     hideBubble();
-  }, HOVER_EXIT_DELAY);
+  }, Math.max(HOVER_EXIT_DELAY, bubbleReturnUntil - Date.now()));
 }
 
-function closePrompt() {
+function closePrompt(keepOverview = false) {
   if (composer.sending) return;
   cancelVoice();
   const wasActive = promptTarget !== null;
   promptTarget = null;
-  if (wasActive) bubbleContent.replaceChildren();
+  if (wasActive) {
+    clearSendFeedback();
+    bubbleContent.replaceChildren();
+  }
   if (wasActive) invoke("set_prompt_active", { active: false });
-  if (hovered || bubbleHovered) showBubble();
-  else hideBubble(true);
+  if (keepOverview && wasActive) {
+    bubbleReturnUntil = Date.now() + RETURN_EXIT_DELAY;
+    showBubble();
+    scheduleBubbleHide();
+  } else {
+    bubbleReturnUntil = 0;
+    if (hovered || bubbleHovered) showBubble();
+    else hideBubble(true);
+  }
 }
 
 function finishDrag() {
@@ -553,13 +596,17 @@ listen("pet-language", (event) => {
   language = event.payload;
   localStorage.setItem("herdr-pet-language", language);
   updateLanguage();
+  clearSendFeedback();
   bubbleContent.replaceChildren();
   if (bubble.classList.contains("visible")) showBubble();
 });
 
 window.addEventListener("resize", () => bubble.classList.contains("visible") && positionBubble());
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !event.isComposing) closePrompt();
+  if (event.key === "Escape" && !event.isComposing) {
+    closePrompt();
+    if (!composer.sending) hideBubble(true);
+  }
 });
 
 listen("pet-state", (event) => {
@@ -636,6 +683,7 @@ listen("pet-voice", (event) => {
 
 invoke("set_theme_follow", { follow: themeSelection === "auto" });
 window.addEventListener("beforeunload", cancelVoice);
+window.addEventListener("beforeunload", clearSendFeedback);
 window.addEventListener("beforeunload", () => pointer.stop());
 window.addEventListener("beforeunload", () => petSkin.stop());
 

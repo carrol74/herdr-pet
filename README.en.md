@@ -54,11 +54,11 @@ Remove-Item Env:HERDR_SOCKET_PATH
 ## Interaction and themes
 
 - Drag to move the pet; double-click to focus the current agent. Position is saved.
-- Hover to show cards with titles and status. Click a card to focus its pane, or the message icon to open the composer.
+- Hover to show cards with titles and status. Click a card to focus its pane, or the message icon to open the composer. Returning to the list allows 1.5 seconds before dismissal. Moving the pointer into the list or pet keeps it visible. Press Esc to close it immediately.
 - The upper-right menu contains Theme, Language, Skin, Session, and Quit, without a duplicate context menu. Session appears only when multiple sessions exist.
 - Six palettes use Herdr's built-in colors: Catppuccin Mocha / Latte, Tokyo Night / Day, and Gruvbox Dark / Light. Colors apply to the bubble, text, controls, status, and pet. Manual choices persist and override automatic matching. Only automatic mode queries Herdr's theme endpoint; unavailable themes fall back to Catppuccin Mocha.
 
-The composer has a back button at the upper left and microphone/send buttons inside the input. Enter adds a line; Ctrl/Cmd + Enter sends, except during IME composition. Drafts are retained per session and agent until exit. Failed submission keeps the draft. “Submitted to Herdr” confirms submission, not task completion.
+The composer has a back button at the upper left and microphone/send buttons inside the input. Enter adds a line; Ctrl/Cmd + Enter sends, except during IME composition. Drafts are retained per session and agent until exit. The send button shows a loading icon during submission and a brief checkmark on success. Failed submission keeps the draft and shows the error. The checkmark confirms submission, not task completion.
 
 ## Local voice input
 

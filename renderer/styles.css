@@ -327,6 +327,17 @@ body {
   background: var(--pet-accent);
 }
 
+.prompt-send[data-state="sending"] svg { animation: prompt-send-spin .8s linear infinite; }
+.prompt-send[data-state="submitted"] {
+  color: var(--pet-done);
+  background: color-mix(in srgb, var(--pet-done) 16%, var(--pet-surface));
+  opacity: 1;
+}
+@keyframes prompt-send-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .prompt-send[data-state="sending"] svg { animation: none; }
+}
+
 .prompt-mic {
   color: var(--pet-muted);
   background: transparent;
