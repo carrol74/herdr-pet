@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { PromptState } = require("../renderer/prompt-state.js");
+const { PromptState, insertTranscript } = require("../renderer/prompt-state.js");
 
 test("drafts stay isolated across panes and sessions, including delimiter names", () => {
   const state = new PromptState();
@@ -43,4 +43,9 @@ test("success clears only the submitted target; whitespace cannot submit", () =>
   state.finish(true);
   assert.equal(state.read(first), "");
   assert.equal(state.read(second), "第二条");
+});
+
+test("dictation replaces the original selection and preserves surrounding draft", () => {
+  assert.deepEqual(insertTranscript("Please FIX now", 7, 10, "修复这个问题"), { text: "Please 修复这个问题 now", cursor: 13 });
+  assert.deepEqual(insertTranscript("abc", 1, 1, "XYZ", 5), { text: "aXYbc", cursor: 3 });
 });

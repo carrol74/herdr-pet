@@ -17,7 +17,6 @@ mod monitor;
 mod platform;
 mod plugin_control;
 mod pointer;
-mod preview;
 mod state;
 mod transport;
 mod voice;
@@ -420,7 +419,6 @@ fn main() {
             send_prompt,
             menu::show_settings_menu,
             set_theme_follow,
-            preview::agent_preview,
             voice::voice_start,
             voice::voice_stop,
             voice::voice_cancel

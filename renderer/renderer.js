@@ -54,10 +54,6 @@ let actionError = null;
 const composer = new PromptState();
 let voice = null;
 let voiceSequence = 0;
-let previewPane = null;
-let preview = { key: null, phase: "idle", text: "", updatedAt: 0 };
-let previewPending = false;
-let cleanPreview = localStorage.getItem("herdr-pet-preview") !== "raw";
 
 
 function updateLanguage() {
@@ -97,7 +93,6 @@ function bubbleHeader(title, withBack = false) {
       english: language === "en",
       theme: themeSelection,
       skin: skinSelection,
-      cleanPreview,
       menuX: rect.left,
       menuY: rect.bottom,
     }).catch((error) => {
@@ -131,15 +126,6 @@ function applyLayout(next) {
   if (bubble.classList.contains("visible")) positionBubble();
 }
 
-function elapsedLabel(sinceMs) {
-  const seconds = Math.max(0, Math.floor((Date.now() - sinceMs) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
-}
-
 function createLine(text, className = "bubble-line") {
   const element = document.createElement("div");
   element.className = className;
@@ -148,8 +134,6 @@ function createLine(text, className = "bubble-line") {
 }
 
 function renderOverview() {
-  const output = bubbleContent.querySelector(".preview-text");
-  if (output) preview.scrollTop = output.scrollTop;
   const scrollTop = bubbleContent.querySelector(".agent-list")?.scrollTop || 0;
   const focused = document.activeElement?.dataset;
   const focusedPane = focused?.pane;
@@ -183,11 +167,7 @@ function renderOverview() {
     subtitle.className = "agent-subtitle";
     const description = document.createElement("span");
     description.textContent = agent.title || agent.cwd || agent.paneId;
-    const elapsed = document.createElement("span");
-    elapsed.className = "agent-elapsed";
-    elapsed.dataset.since = String(agent.statusSinceMs);
-    elapsed.textContent = elapsedLabel(agent.statusSinceMs);
-    subtitle.append(description, " · ", elapsed);
+    subtitle.append(description);
     details.append(heading, subtitle);
     const message = document.createElement("button");
     message.type = "button";
@@ -212,12 +192,6 @@ function renderOverview() {
     header.className = "agent-card-header";
     header.append(focus, message);
     row.append(header);
-    const selectPreview = () => {
-      previewPane = agent.paneId;
-      refreshPreview();
-    };
-    row.addEventListener("mouseenter", selectPreview);
-    row.addEventListener("focusin", selectPreview);
     const focusAgent = () => {
       invoke("focus_agent", { paneId: agent.paneId }).catch((error) => {
         actionError = String(error);
@@ -235,7 +209,6 @@ function renderOverview() {
   content.push(list);
   if (state.blockedCount) content.push(createLine(`${state.blockedCount} ${t("attentionSummary")}`, "overview-summary"));
   bubbleContent.replaceChildren(...content);
-  updatePreviewDisplay();
   list.scrollTop = scrollTop;
   if (focusedPane) {
     [...list.querySelectorAll("button")].find((button) =>
@@ -444,87 +417,6 @@ function renderPrompt() {
     });
 }
 
-function previewTarget() {
-  return state.agents.find((agent) => agent.paneId === previewPane)
-    || state.agents.find((agent) => agent.paneId === state.subject?.paneId)
-    || state.agents[0];
-}
-
-function updatePreviewDisplay() {
-  const target = previewTarget();
-  const key = previewIdentity(state.session, target);
-  const same = preview.key === key;
-  const content = previewText(preview.text, { clean: cleanPreview, cwd: target?.cwd });
-  let layoutChanged = false;
-  for (const row of bubbleContent.querySelectorAll(".agent-row")) {
-    let output = row.querySelector(".preview-card");
-    const visible = row.dataset.pane === target?.paneId
-      && same && preview.phase === "ready" && Boolean(content.trim());
-    if (visible !== Boolean(output)) layoutChanged = true;
-    row.classList.toggle("preview-active", visible);
-    if (!visible) {
-      output?.remove();
-      continue;
-    }
-    if (!output) {
-      output = document.createElement("section");
-      output.className = "preview-card";
-      output.setAttribute("aria-label", t("recentOutput"));
-      output.append(createLine(t("recentOutput"), "preview-label"), createLine("", "preview-text"));
-      row.append(output);
-      output.querySelector(".preview-text").addEventListener("scroll", (event) => {
-        if (preview.key === key) preview.scrollTop = event.currentTarget.scrollTop;
-      });
-    }
-    const text = output.querySelector(".preview-text");
-    if (text.textContent !== content) {
-      const follow = Boolean(text.textContent) && text.scrollHeight > text.clientHeight
-        && text.scrollHeight - text.clientHeight - text.scrollTop <= 2;
-      text.textContent = content;
-      text.scrollTop = follow ? text.scrollHeight : preview.scrollTop || 0;
-    }
-  }
-  if (layoutChanged && bubble.classList.contains("visible") && !promptTarget) positionBubble();
-}
-
-function refreshPreview() {
-  if (!bubble.classList.contains("visible") || promptTarget || !state.agents.length) return;
-  const target = previewTarget();
-  const session = state.session;
-  const key = previewIdentity(session, target);
-  updatePreviewDisplay();
-  if (previewPending || (preview.key === key && Date.now() - preview.updatedAt < 1000)) return;
-  previewPending = true;
-  const requestedAt = Date.now();
-  if (preview.key !== key) preview = { key, phase: "loading", text: "", updatedAt: requestedAt };
-  updatePreviewDisplay();
-  invoke("agent_preview", { paneId: target.paneId, session, terminalId: target.terminalId ?? null,
-    agentSession: target.agentSession ?? null })
-    .then((result) => {
-      if (previewIdentity(state.session, previewTarget()) !== key) return;
-      preview = { key, phase: result.phase, text: result.text,
-        scrollTop: preview.scrollTop || 0, updatedAt: requestedAt };
-    })
-    .catch(() => {
-      if (previewIdentity(state.session, previewTarget()) !== key) return;
-      preview = { key, phase: "failed", text: "", updatedAt: requestedAt };
-    })
-    .finally(() => {
-      previewPending = false;
-      updatePreviewDisplay();
-      if (bubble.classList.contains("visible") && !promptTarget) {
-        positionBubble();
-        if (previewIdentity(state.session, previewTarget()) !== key) refreshPreview();
-      }
-    });
-}
-
-function updateElapsedLabels() {
-  for (const element of bubbleContent.querySelectorAll(".agent-elapsed")) {
-    element.textContent = elapsedLabel(Number(element.dataset.since));
-  }
-}
-
 function positionBubble() {
   const petRect = pet.getBoundingClientRect();
   const previousVisibility = bubble.style.visibility;
@@ -568,7 +460,6 @@ function showBubble() {
   bubble.classList.add("visible");
   petSkin.setInteracting(true);
   positionBubble();
-  refreshPreview();
 }
 
 function cancelBubbleHide() {
@@ -672,10 +563,6 @@ window.addEventListener("keydown", (event) => {
 });
 
 listen("pet-state", (event) => {
-  if (state.session !== event.payload.session) {
-    previewPane = null;
-    preview = { key: null, phase: "idle", text: "", updatedAt: 0 };
-  }
   state = event.payload;
   if (voice && voice.target.session !== state.session) cancelVoice();
   document.getElementById("prompt-form")?.dispatchEvent(new Event("voice-change"));
@@ -717,10 +604,6 @@ Promise.all([
   draw();
 });
 
-setInterval(() => {
-  if (bubble.classList.contains("visible") && !promptTarget) updateElapsedLabels();
-}, 1000);
-
 updateLanguage();
 applyTheme(state.theme);
 applyLayout(layout);
@@ -752,19 +635,6 @@ listen("pet-voice", (event) => {
 });
 
 invoke("set_theme_follow", { follow: themeSelection === "auto" });
-listen("pet-preview", (event) => {
-  cleanPreview = event.payload === "clean";
-  localStorage.setItem("herdr-pet-preview", cleanPreview ? "clean" : "raw");
-  preview.scrollTop = 0;
-  if (bubble.classList.contains("visible") && !promptTarget) {
-    renderOverview();
-    const output = bubbleContent.querySelector(".preview-text");
-    if (output) output.scrollTop = 0;
-    preview.scrollTop = 0;
-    positionBubble();
-  }
-});
-setInterval(refreshPreview, 1000);
 window.addEventListener("beforeunload", cancelVoice);
 window.addEventListener("beforeunload", () => pointer.stop());
 window.addEventListener("beforeunload", () => petSkin.stop());

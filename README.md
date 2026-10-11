@@ -2,13 +2,13 @@
 
 [English](README.en.md) · 简体中文
 
-Herdr 的独立桌面宠物插件，支持 macOS 和 Windows。显示 agent 状态、最近终端输出，并发送文字或本机语音生成的草稿。安装不修改 Herdr 源码。
+Herdr 的独立桌面宠物插件，支持 macOS 和 Windows。显示 agent 标题和状态，并发送文字或本机语音生成的草稿。安装不修改 Herdr 源码。
 
 ## 安装与启动
 
 需要 Herdr 0.7.5+、Node.js 20+、Rust 工具链及 [Tauri 2 系统依赖](https://v2.tauri.app/start/prerequisites/)。macOS 最低支持 11.0，编译目标已在 Tauri 配置中设置。语音构建还需要 CMake、C++ 编译器和 libclang：macOS 使用 Xcode Command Line Tools，并单独安装 CMake（`brew install cmake`）；Windows 使用 Visual Studio 的“使用 C++ 的桌面开发”、Windows SDK 和 LLVM。Windows 请使用原生 PowerShell 和 MSVC Rust 工具链。
 
-官方 Herdr 从 [0.7.0](https://github.com/herdrdev/herdr/releases/tag/v0.7.0) 起提供插件功能；本插件使用的 `agent.prompt` 在 [0.7.5](https://github.com/herdrdev/herdr/releases/tag/v0.7.5) 中加入，因此清单声明 `min_herdr_version = "0.7.5"`。该版本也提供所需的 agent 列表、读取、聚焦、状态订阅以及插件构建和运行环境。自动主题与窗口激活依赖可选接口，不提高最低版本要求。
+官方 Herdr 从 [0.7.0](https://github.com/herdrdev/herdr/releases/tag/v0.7.0) 起提供插件功能；本插件使用的 `agent.prompt` 在 [0.7.5](https://github.com/herdrdev/herdr/releases/tag/v0.7.5) 中加入，因此清单声明 `min_herdr_version = "0.7.5"`。该版本也提供所需的 agent 列表、聚焦、状态订阅以及插件构建和运行环境。自动主题与窗口激活依赖可选接口，不提高最低版本要求。
 
 安装前用 `herdr --version` 查看命令行版本，低于 0.7.5 时可运行 `herdr update` 升级。更新后还需确保正在运行的 Herdr 会话使用 0.7.5 或更高版本。
 
@@ -54,8 +54,7 @@ Remove-Item Env:HERDR_SOCKET_PATH
 ## 交互与主题
 
 - 拖拽移动宠物，双击聚焦当前 agent；位置会保存。
-- 悬停展开卡片，显示标题、状态和持续时间。点击卡片聚焦 pane，消息图标打开输入页。
-- 最近输出显示在所选 agent 卡片内，保留末尾两条非空终端内容，每条最多 180 个字符。悬停卡片或键盘聚焦选择预览，默认选择当前展示的 agent。只在气泡可见时读取一个 agent，每 5 秒刷新；读取失败保留卡片和状态。
+- 悬停展开卡片，显示标题和状态。点击卡片聚焦 pane，消息图标打开输入页。
 - 右上角菜单集中提供 Theme（主题）、语言、皮肤、会话和退出，没有重复的右键菜单。只有多个会话时显示会话选项。
 - 六款主题与 Herdr 内置颜色一致：Catppuccin Mocha / Latte、Tokyo Night / Day、Gruvbox Dark / Light，应用于气泡、文字、按钮、状态和宠物。手选主题持久保存且优先于自动匹配；只有选回自动才查询 Herdr 主题接口。接口不可用时使用 Catppuccin Mocha。
 
@@ -78,7 +77,7 @@ macOS 权限在“系统设置 → 隐私与安全性 → 麦克风”管理；W
 
 | 功能 | 官方 Herdr | 提供扩展接口的 Herdr fork |
 | --- | --- | --- |
-| agent 状态、预览、发送、pane 聚焦 | 使用已有接口 | 同样支持 |
+| agent 状态、发送、pane 聚焦 | 使用已有接口 | 同样支持 |
 | 六款手选主题 | 支持 | 支持 |
 | 自动匹配实际主题 | 隐藏自动选项；使用手选主题或默认 Catppuccin | `client.theme.get` 可用时显示并启用 |
 | 吊起终端窗口 | 只聚焦 pane，不提示缺少窗口激活功能 | `client.activate` 与当前终端支持时启用 |

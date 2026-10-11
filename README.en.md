@@ -2,13 +2,13 @@
 
 English · [简体中文](README.md)
 
-A standalone desktop pet plugin for Herdr on macOS and Windows. Shows agent status and recent terminal output, and sends typed prompts or drafts produced by local voice input. Installation does not modify Herdr source.
+A standalone desktop pet plugin for Herdr on macOS and Windows. Shows agent titles and status, and sends typed prompts or drafts produced by local voice input. Installation does not modify Herdr source.
 
 ## Install and start
 
 Requirements: Herdr 0.7.5+, Node.js 20+, Rust, and [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/). macOS requires 11.0 or later; the build target is set in the Tauri configuration. Voice builds also need CMake, a C++ compiler, and libclang: on macOS, install Xcode Command Line Tools and CMake separately (`brew install cmake`); on Windows, install Visual Studio Desktop development with C++, Windows SDK, and LLVM. Use native PowerShell and the MSVC Rust toolchain on Windows.
 
-Official Herdr introduced plugins in [0.7.0](https://github.com/herdrdev/herdr/releases/tag/v0.7.0). This plugin uses `agent.prompt`, introduced in [0.7.5](https://github.com/herdrdev/herdr/releases/tag/v0.7.5), so its manifest declares `min_herdr_version = "0.7.5"`. That version also provides the required agent listing, reads, focus, status subscriptions, plugin builds, and runtime environment. Automatic themes and terminal activation use optional endpoints and do not raise the minimum version.
+Official Herdr introduced plugins in [0.7.0](https://github.com/herdrdev/herdr/releases/tag/v0.7.0). This plugin uses `agent.prompt`, introduced in [0.7.5](https://github.com/herdrdev/herdr/releases/tag/v0.7.5), so its manifest declares `min_herdr_version = "0.7.5"`. That version also provides the required agent listing, focus, status subscriptions, plugin builds, and runtime environment. Automatic themes and terminal activation use optional endpoints and do not raise the minimum version.
 
 Check the CLI version with `herdr --version` before installation. If it is below 0.7.5, use `herdr update` to upgrade, then ensure the running Herdr session also uses 0.7.5 or later.
 
@@ -54,8 +54,7 @@ Remove-Item Env:HERDR_SOCKET_PATH
 ## Interaction and themes
 
 - Drag to move the pet; double-click to focus the current agent. Position is saved.
-- Hover to show cards with titles, status, and elapsed time. Click a card to focus its pane, or the message icon to open the composer.
-- The selected agent card shows its last two nonempty terminal lines, capped at 180 characters each. Hover or keyboard-focus a card to select its preview; the current agent is selected initially. Only one agent is read, every five seconds while the bubble is visible. Failed reads leave cards and status available.
+- Hover to show cards with titles and status. Click a card to focus its pane, or the message icon to open the composer.
 - The upper-right menu contains Theme, Language, Skin, Session, and Quit, without a duplicate context menu. Session appears only when multiple sessions exist.
 - Six palettes use Herdr's built-in colors: Catppuccin Mocha / Latte, Tokyo Night / Day, and Gruvbox Dark / Light. Colors apply to the bubble, text, controls, status, and pet. Manual choices persist and override automatic matching. Only automatic mode queries Herdr's theme endpoint; unavailable themes fall back to Catppuccin Mocha.
 
@@ -78,7 +77,7 @@ Manage macOS permission in System Settings → Privacy & Security → Microphone
 
 | Feature | Official Herdr | Herdr fork with optional endpoints |
 | --- | --- | --- |
-| Status, previews, prompts, pane focus | Existing endpoints | Supported |
+| Status, prompts, pane focus | Existing endpoints | Supported |
 | Six manual themes | Supported | Supported |
 | Match the actual Herdr theme | Automatic option hidden; manual theme or default Catppuccin | Shown and enabled with `client.theme.get` |
 | Bring the terminal window forward | Pane focus only, without an unavailable-feature notice | Enabled when `client.activate` and the terminal support it |
