@@ -546,7 +546,6 @@ function finishDrag() {
   pet.classList.remove("dragging");
   petSkin.setDragging(false);
   petSkin.setInteracting(hovered || bubbleHovered || bubble.classList.contains("visible"));
-  petSkin.settle();
 }
 
 pet.addEventListener("pointerdown", (event) => {
@@ -558,12 +557,11 @@ pet.addEventListener("pointerdown", (event) => {
   closePrompt();
   hideBubble(true);
   pet.classList.add("dragging");
-  petSkin.setDragging(true);
+  petSkin.setDragging(true, pointer.position);
   invoke("start_drag").catch(finishDrag);
 });
 
 pet.addEventListener("pointerup", finishDrag);
-pet.addEventListener("pointercancel", finishDrag);
 
 pet.addEventListener("dblclick", () => {
   if (composer.sending) return;
@@ -587,6 +585,10 @@ const pointer = new PetPointer(invoke, (target, position) => {
     pet.style.removeProperty("--look-x");
   }
   if (!hovered && !bubbleHovered && (wasHovered || wasBubbleHovered)) scheduleBubbleHide();
+}, (position) => {
+  if (!dragging) return;
+  if (!position.primaryDown) finishDrag();
+  else petSkin.dragMotion.movePointer(position);
 });
 pointer.poll();
 

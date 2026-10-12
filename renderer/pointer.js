@@ -1,7 +1,9 @@
 class PetPointer {
-  constructor(invoke, onHover) {
+  constructor(invoke, onHover, onPosition) {
     this.invoke = invoke;
     this.onHover = onHover;
+    this.onPosition = onPosition;
+    this.position = null;
     this.interactive = false;
     this.paused = false;
     this.stopped = false;
@@ -19,6 +21,8 @@ class PetPointer {
     if (this.stopped) return;
     try {
       const position = await this.invoke("pointer_position");
+      this.position = position;
+      if (!this.paused) this.onPosition(position);
       if (!this.paused && !position.primaryDown) {
         this.onHover(this.targetAt(position.x, position.y), position);
         const interactive = this.targetAt(position.x, position.y) !== null;

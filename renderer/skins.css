@@ -11,8 +11,6 @@
 #pet .character :is(path, rect, circle, ellipse, line, polyline, polygon) { pointer-events: visiblePainted; }
 .pet-response { width: 100%; height: 100%; transition: transform 180ms ease-out; }
 #pet:hover .pet-response { transform: translateY(-1px); }
-#pet.dragging .pet-response { transform: rotate(-4deg); }
-.pet-art.settling .pet-response, .response.settling { animation: settle 360ms ease-out 1; }
 .pet-art .pose { display: none; }
 .pet-art[data-state="idle"] .pose-idle,
 .pet-art[data-state="working"] .pose-working,
@@ -57,7 +55,7 @@
 .pet-art .cloud-rain path:nth-child(3) { animation-delay: 500ms; }
 .pet-art[data-state="done"] .weather-sun { transform-box: fill-box; transform-origin: center; animation: sun-reveal 1.4s ease-out 1; }
 .pet-art[data-state="attention"] .cloud-lightning { animation: lightning-cue 700ms ease-out 1; }
-#pet.dragging *, .pet-art[data-hidden="true"] * { animation-play-state: paused !important; }
+.pet-art[data-hidden="true"] * { animation-play-state: paused !important; }
 @keyframes breathe { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-1px) scale(1.012,1.02); } }
 @keyframes shadow-breathe { 0%,100% { transform: scaleX(1); opacity: .3; } 50% { transform: scaleX(.94); opacity: .24; } }
 @keyframes blink { 0%,43%,47%,100% { transform: scaleY(1); } 45% { transform: scaleY(.08); } }
@@ -72,7 +70,6 @@
 @keyframes sparkle { 0% { opacity: 0; transform: scale(.4) translateY(5px); } 25% { opacity: .8; } 100% { opacity: 0; transform: scale(1.1) translateY(-8px); } }
 @keyframes think-dot { 0%,100% { opacity: .25; } 50% { opacity: .7; } }
 @keyframes ponder { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
-@keyframes settle { 0% { transform: scale(1.035,.965); } 50% { transform: scale(.99,1.01); } 100% { transform: scale(1); } }
 @keyframes cloud-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @keyframes rain-fall { 0% { transform: translateY(0); opacity: .3; } 55% { opacity: .85; } 100% { transform: translateY(8px); opacity: .3; } }
 @keyframes sun-reveal { 0% { transform: translateY(7px) scale(.85); } 100% { transform: translateY(0) scale(1); } }
@@ -246,3 +243,49 @@
   #pet *, #pet .pet-response { animation: none !important; transition: none !important; }
   #pet .stars { display: none !important; }
 }
+
+.pet-art .pose-drag { display: none; transform-box: fill-box; transform-origin: center 25%; }
+.pet-art:is([data-dragging="true"], [data-returning="true"]) .pose:not(.pose-drag) { display: none; }
+.pet-art:is([data-dragging="true"], [data-returning="true"]) .pose-drag[data-current="true"] { display: inline; }
+.pet-art:is([data-dragging="true"], [data-returning="true"]) .character,
+.pet-art:is([data-dragging="true"], [data-returning="true"]) .shadow { animation-play-state: paused; }
+.pet-art:is([data-dragging="true"], [data-returning="true"]) :is(.stars, .thoughts) { visibility: hidden; }
+.pet-art .pose-drag * { animation: none !important; }
+.pet-art .pose-drag :is(.idle-body, .idle-tail, .idle-hands, .idle-weather) { transform: none; }
+.pet-art[data-dragging="true"] .pose-drag {
+  transform: translateY(-7px) rotate(var(--drag-tilt, 0deg)) scale(var(--drag-stretch-x, 1), var(--drag-stretch-y, 1));
+}
+.pet-art[data-dragging="true"] .shadow { transform: scaleX(.8) !important; opacity: .16 !important; }
+.pet-art .pose-drag :is(.drag-arm, .drag-leg, .drag-tail, .drag-weather, .drag-ear) { transform-box: fill-box; transform-origin: center top; }
+.pet-art .pose-drag .drag-arm-left { transform-origin: right top; }
+.pet-art .pose-drag .drag-arm-right { transform-origin: left top; }
+.pet-art .pose-drag .drag-tail { transform-origin: left center; }
+.pet-art[data-dragging="true"] .drag-arm-left { transform: rotate(var(--drag-arm-left, 76deg)) scaleY(1.2); }
+.pet-art[data-dragging="true"] .drag-arm-right { transform: rotate(var(--drag-arm-right, -76deg)) scaleY(1.2); }
+.pet-art[data-dragging="true"] .drag-leg-left { transform: translate(var(--drag-trail-x, 0px), 4px) rotate(var(--drag-leg-left, 10deg)); }
+.pet-art[data-dragging="true"] .drag-leg-right { transform: translate(var(--drag-trail-x, 0px), 4px) rotate(var(--drag-leg-right, -10deg)); }
+.pet-art[data-dragging="true"] .drag-tail { transform: rotate(var(--drag-tail-angle, 0deg)); }
+.pet-art[data-dragging="true"] .drag-weather { transform: translate(var(--drag-trail-x, 0px), var(--drag-trail-y, 0px)) rotate(var(--drag-tilt, 0deg)); }
+.pet-art[data-returning="true"] .pose-drag,
+.pet-art[data-returning="true"] .pose-drag :is(.drag-arm, .drag-leg, .drag-tail, .drag-weather, .drag-ear) {
+  transform: none; transition: transform 420ms cubic-bezier(.2, 1.45, .4, 1);
+}
+.pet-art[data-returning="true"] .shadow { animation: none; transform: scaleX(1); opacity: .3; transition: transform 420ms ease-out, opacity 420ms ease-out; }
+.pet-art[data-reduced="true"] .pose-drag,
+.pet-art[data-reduced="true"] .pose-drag :is(.drag-arm, .drag-leg, .drag-tail, .drag-weather, .drag-ear) { transform: none !important; transition: none; }
+.pet-art[data-reduced="true"][data-dragging="true"] .shadow { transform: none !important; opacity: .3 !important; }
+
+.pet-art .drag-rainbow { opacity: 0; transform-box: fill-box; transform-origin: center bottom; }
+.pet-art .drag-rainbow path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 * (1 - clamp(0, var(--drag-rainbow-reveal, 0) - var(--rainbow-band) * .055, 1)));
+}
+.pet-art[data-dragging="true"] .drag-rainbow {
+  opacity: 1;
+  transform: translateY(var(--drag-rainbow-rise, 0px)) rotate(var(--drag-rainbow-sway, 0deg));
+}
+.pet-art[data-dragging="true"] .skin-cloud .drag-weather { opacity: .65; }
+.pet-art[data-returning="true"] .drag-rainbow { opacity: 0; transform: translateY(8px) scale(.9); transition: opacity 300ms ease-out, transform 420ms ease-out; }
+.pet-art[data-returning="true"] .drag-rainbow path { transition: stroke-dashoffset 300ms ease-out; }
+.pet-art[data-reduced="true"] .drag-rainbow { display: none; }
+

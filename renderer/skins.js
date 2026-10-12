@@ -83,19 +83,21 @@ class PetSkin {
     this.dragging = false;
     this.stopped = false;
     this.motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    this.onMotionPreferenceChange = () => this.syncIdleMotion();
+    this.dragMotion = new PetDragMotion(element, this.motionPreference, () => this.syncIdleMotion());
+    this.onMotionPreferenceChange = () => {
+      this.dragMotion.sync();
+      this.syncIdleMotion();
+    };
     this.motionPreference.addEventListener("change", this.onMotionPreferenceChange);
     this.select(selection);
     this.updateVisibility();
-    this.element.addEventListener("animationend", (event) => {
-      if (event.animationName === "settle") this.element.classList.remove("settling");
-    });
   }
 
   select(selection) {
     const skin = selectedSkin(selection);
     if (this.element.dataset.skin === skin) return;
     this.cancelIdleMotion();
+    this.dragMotion.cancel();
     this.idleActions = [];
     this.lastIdleAction = null;
     this.firstIdleAction = true;
@@ -107,6 +109,7 @@ class PetSkin {
     response.append(window.document.importNode(document.documentElement, true));
     this.element.replaceChildren(response);
     this.element.dataset.skin = skin;
+    this.dragMotion.prepare(skin);
     this.stateKey = null;
   }
 
@@ -117,9 +120,10 @@ class PetSkin {
     const samePhase = this.element.dataset.state === phase;
     this.stateKey = nextKey;
     this.element.dataset.state = phase;
+    this.dragMotion.selectPose(phase);
     if (!samePhase && phase === "idle") this.firstIdleAction = true;
     this.syncIdleMotion();
-    if (samePhase && ["attention", "done"].includes(phase)) {
+    if (samePhase && !this.dragMotion.active && ["attention", "done"].includes(phase)) {
       requestAnimationFrame(() => {
         if (this.stateKey !== nextKey) return;
         this.element.getAnimations({ subtree: true }).forEach((animation) => { animation.currentTime = 0; });
@@ -132,7 +136,7 @@ class PetSkin {
       this.cancelIdleMotion();
       return;
     }
-    if (window.document.hidden || this.dragging) {
+    if (window.document.hidden || this.dragging || this.dragMotion.active) {
       if (this.idleTimer !== null) {
         clearTimeout(this.idleTimer);
         this.idleTimer = null;
@@ -202,25 +206,27 @@ class PetSkin {
     this.syncIdleMotion();
   }
 
-  setDragging(active) {
+  setDragging(active, position) {
+    if (this.dragging === active) return;
     this.dragging = active;
+    if (active) {
+      this.cancelIdleMotion();
+      this.dragMotion.start(position);
+    } else this.dragMotion.end();
     this.syncIdleMotion();
   }
 
   updateVisibility() {
     this.element.dataset.hidden = String(window.document.hidden);
+    this.dragMotion.sync();
     this.syncIdleMotion();
   }
 
   stop() {
     this.stopped = true;
     this.cancelIdleMotion();
+    this.dragMotion.cancel();
     this.motionPreference.removeEventListener("change", this.onMotionPreferenceChange);
-  }
-
-  settle() {
-    this.element.classList.remove("settling");
-    requestAnimationFrame(() => this.element.classList.add("settling"));
   }
 }
 
