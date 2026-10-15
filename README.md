@@ -53,7 +53,7 @@ Remove-Item Env:HERDR_SOCKET_PATH
 
 ## 交互与主题
 
-- 拖拽移动宠物，双击聚焦当前 agent；位置会保存。
+- 按住并移动超过 6px 后拖拽宠物，位置会保存。双击不切换 agent。
 - 悬停展开卡片，显示标题和状态。点击卡片聚焦 pane，消息图标打开输入页。返回列表后延迟 1.5 秒收起，鼠标移回列表或宠物时继续显示；按 Esc 可立即关闭。
 - 右上角菜单集中提供 Theme（主题）、语言、皮肤、会话和退出，没有重复的右键菜单。只有多个会话时显示会话选项。
 - 六款主题与 Herdr 内置颜色一致：Catppuccin Mocha / Latte、Tokyo Night / Day、Gruvbox Dark / Light，应用于气泡、文字、按钮、状态和宠物。手选主题持久保存且优先于自动匹配；只有选回自动才查询 Herdr 主题接口。接口不可用时使用 Catppuccin Mocha。

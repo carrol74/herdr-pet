@@ -53,7 +53,7 @@ Remove-Item Env:HERDR_SOCKET_PATH
 
 ## Interaction and themes
 
-- Drag to move the pet; double-click to focus the current agent. Position is saved.
+- Hold and move more than 6px to drag the pet. Position is saved. Double-clicking does not switch agents.
 - Hover to show cards with titles and status. Click a card to focus its pane, or the message icon to open the composer. Returning to the list allows 1.5 seconds before dismissal. Moving the pointer into the list or pet keeps it visible. Press Esc to close it immediately.
 - The upper-right menu contains Theme, Language, Skin, Session, and Quit, without a duplicate context menu. Session appears only when multiple sessions exist.
 - Six palettes use Herdr's built-in colors: Catppuccin Mocha / Latte, Tokyo Night / Day, and Gruvbox Dark / Light. Colors apply to the bubble, text, controls, status, and pet. Manual choices persist and override automatic matching. Only automatic mode queries Herdr's theme endpoint; unavailable themes fall back to Catppuccin Mocha.

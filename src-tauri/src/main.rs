@@ -155,7 +155,11 @@ fn set_pet_size(state: State<'_, ManagedState>, width: f64, height: f64) {
 }
 
 #[tauri::command]
-fn start_drag(window: WebviewWindow) -> Result<(), String> {
+fn start_drag(window: WebviewWindow) -> Result<bool, String> {
+    #[cfg(any(target_os = "macos", windows))]
+    if !platform::primary_mouse_button_down() {
+        return Ok(false);
+    }
     window.start_dragging().map_err(|error| error.to_string())?;
     #[cfg(any(target_os = "macos", windows))]
     std::thread::spawn(move || {
@@ -165,7 +169,7 @@ fn start_drag(window: WebviewWindow) -> Result<(), String> {
         }
         let _ = window.emit("pet-drag-ended", ());
     });
-    Ok(())
+    Ok(true)
 }
 
 #[tauri::command]

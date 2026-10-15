@@ -2,6 +2,7 @@ const GAP = 8;
 const MARGIN = 6;
 const HOVER_EXIT_DELAY = 160;
 const RETURN_EXIT_DELAY = 1500;
+const DRAG_THRESHOLD = 6;
 const DEFAULT_LAYOUT = { petLeft: 12, petTop: Math.max(0, innerHeight - document.getElementById("pet").offsetHeight - 12) };
 
 let currentTheme = null;
@@ -51,6 +52,7 @@ let bubbleHovered = false;
 let hideTimer = null;
 let bubbleReturnUntil = 0;
 let dragging = false;
+let pendingDrag = null;
 let promptTarget = null;
 let actionError = null;
 const composer = new PromptState();
@@ -548,24 +550,56 @@ function finishDrag() {
   petSkin.setInteracting(hovered || bubbleHovered || bubble.classList.contains("visible"));
 }
 
+function clearPendingDrag() {
+  const gesture = pendingDrag;
+  pendingDrag = null;
+  if (gesture && pet.hasPointerCapture(gesture.pointerId)) {
+    pet.releasePointerCapture(gesture.pointerId);
+  }
+}
+
 pet.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0) return;
-  if (composer.sending) return;
+  if (event.button !== 0 || !event.isPrimary || composer.sending || dragging) return;
   event.preventDefault();
+  pendingDrag = {
+    pointerId: event.pointerId,
+    x: event.screenX,
+    y: event.screenY,
+  };
+  pet.setPointerCapture(event.pointerId);
+});
+
+pet.addEventListener("pointermove", (event) => {
+  if (!pendingDrag || event.pointerId !== pendingDrag.pointerId) return;
+  if (!(event.buttons & 1)) {
+    clearPendingDrag();
+    return;
+  }
+  const distance = Math.hypot(event.screenX - pendingDrag.x, event.screenY - pendingDrag.y);
+  if (distance < DRAG_THRESHOLD) return;
+  clearPendingDrag();
   dragging = true;
   bubbleHovered = false;
   closePrompt();
   hideBubble(true);
   pet.classList.add("dragging");
   petSkin.setDragging(true, pointer.position);
-  invoke("start_drag").catch(finishDrag);
+  invoke("start_drag").then((started) => {
+    if (!started) finishDrag();
+  }).catch(finishDrag);
 });
 
-pet.addEventListener("pointerup", finishDrag);
+pet.addEventListener("pointerup", (event) => {
+  if (event.button !== 0) return;
+  clearPendingDrag();
+  finishDrag();
+});
+pet.addEventListener("pointercancel", clearPendingDrag);
+pet.addEventListener("lostpointercapture", () => { pendingDrag = null; });
 
-pet.addEventListener("dblclick", () => {
-  if (composer.sending) return;
-  if (state.subject) invoke("focus_agent", { paneId: state.subject.paneId });
+pet.addEventListener("dblclick", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
 });
 
 pet.addEventListener("contextmenu", (event) => event.preventDefault());
