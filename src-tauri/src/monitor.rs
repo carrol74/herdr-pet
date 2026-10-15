@@ -7,7 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
 use crate::api::{self, AgentInfo, AgentStatus};
-use crate::state::{Connection, Mood, PetState, SessionInfo, SubjectInfo};
+use crate::state::{status_priority, Connection, Mood, PetState, SessionInfo, SubjectInfo};
 use crate::SharedState;
 
 const RECONCILE_INTERVAL: Duration = Duration::from_secs(5);
@@ -62,12 +62,13 @@ struct Subscription {
 
 impl Subscription {
     fn connect(path: &std::path::Path, pane_ids: &[String]) -> Result<Self, api::ApiError> {
-        let subscriptions = pane_ids
+        let mut subscriptions = pane_ids
             .iter()
             .map(|pane_id| {
                 serde_json::json!({"type": "pane.agent_status_changed", "pane_id": pane_id})
             })
             .collect::<Vec<_>>();
+        subscriptions.push(serde_json::json!({"type": "pane.focused"}));
         let request = serde_json::json!({
             "id": "pet:subscribe",
             "method": "events.subscribe",
@@ -92,7 +93,7 @@ impl Subscription {
                 .all(|pane_id| self.pane_ids.contains(pane_id))
     }
 
-    fn drain(&mut self) -> Result<Vec<api::StatusEvent>, api::ApiError> {
+    fn drain(&mut self) -> Result<Vec<api::MonitorEvent>, api::ApiError> {
         let mut chunk = [0_u8; 4096];
         loop {
             match crate::platform::read_available(&mut self.stream, &mut chunk) {
@@ -112,13 +113,15 @@ impl Subscription {
             let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
                 continue;
             };
-            let Ok(event) = serde_json::from_value::<api::StatusEvent>(
-                value.pointer("/data").cloned().unwrap_or_default(),
-            ) else {
+            let Ok(event) = serde_json::from_value::<api::MonitorEvent>(value) else {
                 continue;
             };
-            if self.pane_ids.contains(&event.pane_id) {
-                events.push(event);
+            match &event {
+                api::MonitorEvent::Status(status) if self.pane_ids.contains(&status.pane_id) => {
+                    events.push(event);
+                }
+                api::MonitorEvent::Focus { .. } => events.push(event),
+                _ => {}
             }
         }
         Ok(events)
@@ -186,7 +189,23 @@ fn run_loop(app: AppHandle, state: Arc<Mutex<SharedState>>, controls: Receiver<C
         if let Some(current) = subscription.as_mut() {
             match current.drain() {
                 Ok(events) if !events.is_empty() => {
-                    apply_events(&state, events, &mut status_clock, selected_pane.as_deref());
+                    let mut statuses = Vec::new();
+                    for event in events {
+                        match event {
+                            api::MonitorEvent::Status(status) => statuses.push(status),
+                            api::MonitorEvent::Focus { pane_id } => {
+                                selected_pane = Some(pane_id);
+                                update_subject(&state, selected_pane.as_deref());
+                            }
+                            api::MonitorEvent::Other => {}
+                        }
+                    }
+                    apply_events(
+                        &state,
+                        statuses,
+                        &mut status_clock,
+                        selected_pane.as_deref(),
+                    );
                     publish(&app, &state);
                 }
                 Ok(_) => {}
@@ -265,10 +284,7 @@ fn reconcile(
                 shared.socket_path = path.to_path_buf();
                 shared.snapshot = PetState {
                     connection: Connection::Online,
-                    mood: subject
-                        .as_ref()
-                        .map(|agent| Mood::from_status(agent.status))
-                        .unwrap_or(Mood::Sleeping),
+                    mood: Mood::from_agents(&agents),
                     blocked_count: agents
                         .iter()
                         .filter(|agent| agent.status == AgentStatus::Blocked)
@@ -282,9 +298,7 @@ fn reconcile(
                     theme_supported: theme_monitor.supported == Some(true),
                 };
             }
-            if pane_ids.is_empty() {
-                *subscription = None;
-            } else if !subscription
+            if !subscription
                 .as_ref()
                 .is_some_and(|current| current.matches(&pane_ids))
             {
@@ -367,18 +381,16 @@ fn apply_events(
                 .find(|agent| agent.pane_id == pane)
         })
         .cloned();
-    shared.snapshot.mood = shared
-        .snapshot
-        .subject
-        .as_ref()
-        .map(|agent| Mood::from_status(agent.status))
-        .unwrap_or(Mood::Sleeping);
+    shared.snapshot.mood = Mood::from_agents(&shared.snapshot.agents);
 }
 
 fn update_subject(state: &Arc<Mutex<SharedState>>, selected_pane: Option<&str>) {
     let mut shared = state
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
+    for agent in &mut shared.snapshot.agents {
+        agent.focused = selected_pane == Some(agent.pane_id.as_str());
+    }
     shared.snapshot.subject = selected_pane
         .and_then(|pane| {
             shared
@@ -388,12 +400,6 @@ fn update_subject(state: &Arc<Mutex<SharedState>>, selected_pane: Option<&str>) 
                 .find(|agent| agent.pane_id == pane)
         })
         .cloned();
-    shared.snapshot.mood = shared
-        .snapshot
-        .subject
-        .as_ref()
-        .map(|agent| Mood::from_status(agent.status))
-        .unwrap_or(Mood::Sleeping);
 }
 
 fn status_since(status_clock: &HashMap<String, (AgentStatus, u64)>, agent: &AgentInfo) -> u64 {
@@ -414,13 +420,9 @@ fn now_ms() -> u64 {
 
 fn pick_subject(agents: &[AgentInfo]) -> Option<&AgentInfo> {
     agents.iter().find(|agent| agent.focused).or_else(|| {
-        agents.iter().min_by_key(|agent| match agent.agent_status {
-            AgentStatus::Blocked => 0,
-            AgentStatus::Working => 1,
-            AgentStatus::Done => 2,
-            AgentStatus::Idle => 3,
-            AgentStatus::Unknown => 4,
-        })
+        agents
+            .iter()
+            .min_by_key(|agent| status_priority(agent.agent_status))
     })
 }
 
@@ -455,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn focused_agent_wins() {
+    fn focused_agent_is_the_list_selection() {
         let agents = [
             agent("blocked", AgentStatus::Blocked, false),
             agent("focused", AgentStatus::Idle, true),
@@ -464,5 +466,100 @@ mod tests {
             pick_subject(&agents).map(|item| item.pane_id.as_str()),
             Some("focused")
         );
+    }
+
+    fn shared_state(statuses: &[AgentStatus]) -> Arc<Mutex<SharedState>> {
+        let agents = statuses
+            .iter()
+            .enumerate()
+            .map(|(index, &status)| {
+                SubjectInfo::from_agent(&agent(&index.to_string(), status, false), 0)
+            })
+            .collect::<Vec<_>>();
+        Arc::new(Mutex::new(SharedState {
+            socket_path: Default::default(),
+            snapshot: PetState {
+                connection: Connection::Online,
+                mood: Mood::from_agents(&agents),
+                blocked_count: agents
+                    .iter()
+                    .filter(|agent| agent.status == AgentStatus::Blocked)
+                    .count(),
+                agents,
+                ..PetState::default()
+            },
+        }))
+    }
+
+    #[test]
+    fn summary_priorities_do_not_depend_on_list_order() {
+        let cases = [
+            (AgentStatus::Unknown, Mood::Neutral),
+            (AgentStatus::Idle, Mood::Sleeping),
+            (AgentStatus::Done, Mood::Celebrate),
+            (AgentStatus::Working, Mood::Working),
+            (AgentStatus::Blocked, Mood::Attention),
+        ];
+        let mut statuses = Vec::new();
+        for (status, mood) in cases {
+            statuses.push(status);
+            let state = shared_state(&statuses);
+            assert_eq!(state.lock().unwrap().snapshot.mood, mood);
+            let mut reversed = statuses.clone();
+            reversed.reverse();
+            let state = shared_state(&reversed);
+            assert_eq!(state.lock().unwrap().snapshot.mood, mood);
+        }
+        assert_eq!(Mood::from_agents(&[]), Mood::Sleeping);
+        assert_eq!(PetState::default().mood, Mood::Offline);
+    }
+
+    #[test]
+    fn changing_list_selection_does_not_override_waiting_summary() {
+        let state = shared_state(&[AgentStatus::Blocked, AgentStatus::Idle]);
+        for pane in ["0", "1", "0"] {
+            update_subject(&state, Some(pane));
+            let shared = state.lock().unwrap();
+            assert_eq!(shared.snapshot.subject.as_ref().unwrap().pane_id, pane);
+            assert_eq!(shared.snapshot.mood, Mood::Attention);
+            assert_eq!(shared.snapshot.blocked_count, 1);
+            assert_eq!(
+                shared
+                    .snapshot
+                    .agents
+                    .iter()
+                    .filter(|agent| agent.focused)
+                    .count(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn unselected_agent_status_changes_refresh_the_summary() {
+        let state = shared_state(&[AgentStatus::Idle, AgentStatus::Working]);
+        update_subject(&state, Some("0"));
+        let mut clock = HashMap::new();
+        for (status, mood, blocked_count) in [
+            (AgentStatus::Blocked, Mood::Attention, 1),
+            (AgentStatus::Working, Mood::Working, 0),
+            (AgentStatus::Done, Mood::Celebrate, 0),
+            (AgentStatus::Idle, Mood::Sleeping, 0),
+        ] {
+            apply_events(
+                &state,
+                vec![api::StatusEvent {
+                    pane_id: "1".to_string(),
+                    agent_status: Some(status),
+                    title: None,
+                }],
+                &mut clock,
+                Some("0"),
+            );
+            let shared = state.lock().unwrap();
+            assert_eq!(shared.snapshot.mood, mood);
+            assert_eq!(shared.snapshot.blocked_count, blocked_count);
+            assert_eq!(shared.snapshot.subject.as_ref().unwrap().pane_id, "0");
+        }
     }
 }

@@ -190,11 +190,7 @@ fn focus_agent(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .socket_path
         .clone();
-    control
-        .0
-        .send(monitor::Control::SelectAgent(pane_id.clone()))
-        .map_err(|error| error.to_string())?;
-    run_focus_request(window, path, pane_id);
+    run_focus_request(window, path, pane_id, control.0.clone());
     Ok(())
 }
 
@@ -240,11 +236,22 @@ fn set_theme_follow(control: State<'_, MonitorControl>, follow: bool) -> Result<
         .map_err(|error| error.to_string())
 }
 
-fn run_focus_request(window: WebviewWindow, path: PathBuf, pane_id: String) {
+fn run_focus_request(
+    window: WebviewWindow,
+    path: PathBuf,
+    pane_id: String,
+    control: Sender<monitor::Control>,
+) {
     std::thread::spawn(move || {
-        if let Err(error) =
-            api::request(&path, "agent.focus", serde_json::json!({"target": pane_id}))
-        {
+        if let Err(error) = api::request(
+            &path,
+            "agent.focus",
+            serde_json::json!({"target": &pane_id}),
+        ) {
+            let _ = window.emit("pet-error", error.to_string());
+            return;
+        }
+        if let Err(error) = control.send(monitor::Control::SelectAgent(pane_id)) {
             let _ = window.emit("pet-error", error.to_string());
             return;
         }

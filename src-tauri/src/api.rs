@@ -279,6 +279,17 @@ pub fn request(
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(tag = "event", content = "data")]
+pub enum MonitorEvent {
+    #[serde(rename = "pane.agent_status_changed")]
+    Status(StatusEvent),
+    #[serde(rename = "pane.focused")]
+    Focus { pane_id: String },
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct StatusEvent {
     pub pane_id: String,
     pub agent_status: Option<AgentStatus>,
@@ -289,6 +300,24 @@ pub struct StatusEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn monitor_decodes_native_focus_and_status_events_separately() {
+        let focus: MonitorEvent = serde_json::from_value(serde_json::json!({
+            "event": "pane.focused",
+            "data": {"type": "pane_focused", "pane_id": "pane", "workspace_id": "workspace"}
+        }))
+        .unwrap();
+        assert!(matches!(focus, MonitorEvent::Focus { pane_id } if pane_id == "pane"));
+        let status: MonitorEvent = serde_json::from_value(serde_json::json!({
+            "event": "pane.agent_status_changed",
+            "data": {"pane_id": "pane", "agent_status": "blocked"}
+        }))
+        .unwrap();
+        assert!(
+            matches!(status, MonitorEvent::Status(event) if event.agent_status == Some(AgentStatus::Blocked))
+        );
+    }
 
     #[test]
     fn rejects_path_traversal_session_names() {

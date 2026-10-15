@@ -28,7 +28,7 @@ pub enum Connection {
     Offline,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mood {
     Sleeping,
@@ -39,7 +39,25 @@ pub enum Mood {
     Offline,
 }
 
+pub fn status_priority(status: AgentStatus) -> u8 {
+    match status {
+        AgentStatus::Blocked => 0,
+        AgentStatus::Working => 1,
+        AgentStatus::Done => 2,
+        AgentStatus::Idle => 3,
+        AgentStatus::Unknown => 4,
+    }
+}
+
 impl Mood {
+    pub fn from_agents(agents: &[SubjectInfo]) -> Self {
+        agents
+            .iter()
+            .min_by_key(|agent| status_priority(agent.status))
+            .map(|agent| Self::from_status(agent.status))
+            .unwrap_or(Self::Sleeping)
+    }
+
     pub fn from_status(status: AgentStatus) -> Self {
         match status {
             AgentStatus::Idle => Self::Sleeping,

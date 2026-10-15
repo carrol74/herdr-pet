@@ -70,6 +70,15 @@ function skinState(snapshot) {
   }[snapshot.mood] || "unknown";
 }
 
+function skinStateKey(snapshot) {
+  const phase = skinState(snapshot);
+  const status = { idle: "idle", working: "working", attention: "blocked", done: "done", unknown: "unknown" }[phase];
+  const since = (snapshot.agents || []).reduce((latest, agent) => (
+    agent.status === status ? Math.max(latest, agent.statusSinceMs || 0) : latest
+  ), 0);
+  return JSON.stringify([phase, snapshot.session, since]);
+}
+
 class PetSkin {
   constructor(element, selection) {
     this.element = element;
@@ -115,7 +124,7 @@ class PetSkin {
 
   update(snapshot) {
     const phase = skinState(snapshot);
-    const nextKey = JSON.stringify([phase, snapshot.session, snapshot.subject?.paneId, snapshot.subject?.statusSinceMs]);
+    const nextKey = skinStateKey(snapshot);
     if (this.stateKey === nextKey) return;
     const samePhase = this.element.dataset.state === phase;
     this.stateKey = nextKey;
@@ -230,4 +239,4 @@ class PetSkin {
   }
 }
 
-if (typeof module !== "undefined") module.exports = { selectedSkin, skinState };
+if (typeof module !== "undefined") module.exports = { selectedSkin, skinState, skinStateKey };

@@ -53,6 +53,7 @@ Remove-Item Env:HERDR_SOCKET_PATH
 
 ## Interaction and themes
 
+- The pet summarizes all agents in the connected Herdr session: waiting for input > working > done > idle. It shows unknown when all agent states are unknown, and offline when the connection fails. Selecting an agent in either the bubble or the Herdr list does not override this summary. Native focus events update the selected card.
 - Hold and move more than 6px to drag the pet. Position is saved. Double-clicking does not switch agents.
 - Hover to show cards with titles and status. Click a card to focus its pane, or the message icon to open the composer. Returning to the list allows 1.5 seconds before dismissal. Moving the pointer into the list or pet keeps it visible. Press Esc to close it immediately.
 - The upper-right menu contains Theme, Language, Skin, Session, and Quit, without a duplicate context menu. Session appears only when multiple sessions exist.
